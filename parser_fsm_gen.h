@@ -1,6 +1,7 @@
 #ifndef INCLUDED_parser_fsm_GEN_H
 #define INCLUDED_parser_fsm_GEN_H
 #include <vector>
+#include <map>
 #include "parser_nodes_.h"
 
 
@@ -32,6 +33,7 @@ struct ParserFsm
 		check_native_func,
 		else_body,
 		else_expr,
+		elif_expr,
 		else_stmt,
 		enumerable_method_def,
 		expr,
@@ -39,6 +41,8 @@ struct ParserFsm
 		exrp,
 		field_announcement,
 		field_def,
+		variable_announcement,
+		variable_def,
 		foeach_stmt,
 		for_body,
 		for_stmt,
@@ -59,9 +63,9 @@ struct ParserFsm
 		statement_of_module,
 		stmt,
 		then_expr,
-		type_body,
 		type_parent_stmt,
 		type_stmt,
+		type_body,
 		using_stmt,
 		while_body,
 		while_stmt,
@@ -91,6 +95,15 @@ struct ParserFsm
 	   1,1,2,1   ,
 	}     ;
 
+	//std::vector<RulePair> type_rules{
+	//	{{Tk::EXPR, Tk::DOT, Tk::EXPR}, cb_PathBinOp},
+	//	{{Tk::EXPR, Tk::SUB, Tk::EXPR}, cb_ArrowBinOp},
+	//	{{Tk::EXPR, Tk::MUL, Tk::EXPR}, cb_TupleBinOp},
+	//};
+	//
+	//int type_power[2] = {
+	//};
+
 	Parser__State State() { return _stack.back(); }
 
 	void OnAs();
@@ -112,11 +125,14 @@ struct ParserFsm
 	void OnNextComma();
 	void OnNextClosePar();
 	void OnIf();
+	void OnElse();
+	void OnElif();
 	void OnInt();
 	void OnLambda();
 	void OnNextColon();
 	void OnNextEOL();
 	void OnNextAsign();
+	void OnNextDot();
 	void OnNextNative();
 	void OnNextNotNative();
 	void OnNotEOF();
@@ -143,11 +159,10 @@ struct ParserFsm
 	void OnYield();
 
 	void ParseExpr();
+	void ParseType();
+	void ParseByRules(std::vector<RulePair>& rules, int* power);
 
 	void On_inExprStack__BinOp_OpenPar();
-	void On_inExprStack__Expr_LABinOp_Expr_LABinOp_or_End_or_Comma_or_ClosePar_or_EOL_or_EOF();
-	void On_inExprStack__Expr_RABinOp_Expr_LABinOp_or_End_or_Comma_or_ClosePar_or_EOL_or_EOF();
-	void On_inExprStack__UnOp_Expr_End_or_Comma_or_ClosePar_or_EOL_or_EOF_or_not_OpenPar_or_RABinOp();
 	void On_inExprStack__CallStart_ClosePar();
 	void On_inExprStack__empty();
 	void On_inExprStack__not_BinOp_OpenPar();
@@ -161,16 +176,20 @@ private:
 	std::vector<std::shared_ptr<token_::Token>>* _tokens;
 
 	std::vector<Node*> _exprs;
-	std::vector<Body**> _bodies;
+	std::vector<Node*> _type;
+	std::vector<Body*> _bodies;
+	std::vector<If*> _ifs;
 	std::vector<Node*> _statements;
 	std::vector<std::vector<Node*>> _stack_of_exprs;
+	std::map<std::string, Type*> _types;
 	VarDefinition* _announced_variable{ nullptr };
 	Module* _module;
 	bool _static_field{ false };
+	bool _one_line_func{ false };
 
 	size_t _idx{ 0 };
 	size_t _size{ 0 };
 };
 
 
-#endif // INCLUDED_parser_fsm_GEN_H
+#endif // ! INCLUDED_parser_fsm_GEN_H

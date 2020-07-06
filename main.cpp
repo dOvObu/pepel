@@ -14,7 +14,7 @@ int main()
 	//std::cout << "func size [" << res->functions.size() << ']' << std::endl;
 	//std::cout << "type size [" << res->types.size() << ']' << std::endl;
 	Printer p;
-	res->functions[0]->accept(p);
+	res->accept(p);
 	std::cout << std::endl;
 	//std::cin.get();
 

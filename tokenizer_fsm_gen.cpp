@@ -29,10 +29,11 @@ std::pair<std::vector<std::shared_ptr<Token>>&, char const*> TokenizerFsm::opera
       ||  Current == 'A' || Current == 'B' || Current == 'C' || Current == 'D' || Current == 'E' || Current == 'F' || Current == 'G' || Current == 'H' || Current == 'I' || Current == 'J' || Current == 'K' || Current == 'L' || Current == 'M' || Current == 'N' || Current == 'O' || Current == 'P' || Current == 'Q' || Current == 'R' || Current == 'S' || Current == 'T' || Current == 'U' || Current == 'V' || Current == 'W' || Current == 'X' || Current == 'Y' || Current == 'Z') OnLetter();
       if (Current == '_') OnUnderscore();
       if (Current == '\n') OnNewLine();
-      if (Current == '"') OnQuotation();
+	  if (Current == '"') OnQuotation();
+	  else if (_state == TokenizerFsm::Tokenizer__State::string) { _buffer += Current; ++_idx; }
       if (Current == ' ') OnSpace();
       if (Current == '\t') OnTab();
-      if (Current == '.' || Current == '+' || Current == '-' || Current == '*' || Current == '/' || Current == ',' || Current == '!' || Current == ':' || Current == '|' || Current == '?' || Current == '%' || Current == '\\' || Current == '(' || Current == ')' || Current == '=') OnSymbol();
+      if (Current == '.' || Current == '+' || Current == '-' || Current == '*' || Current == '/' || Current == ',' || Current == '!' || Current == ':' || Current == ';' || Current == '|' || Current == '?' || Current == '%' || Current == '\\' || Current == '(' || Current == ')' || Current == '=') OnSymbol();
    }
    new Eof();
 
@@ -46,7 +47,8 @@ void TokenizerFsm::NewId()
    else if (_buffer == "this" ) new This();
    else if (_buffer == "if"   ) new If();
    else if (_buffer == "then" ) new Then();
-   else if (_buffer == "else" ) new Else();
+   else if (_buffer == "else" ) {RmEOLs; new Else();}
+   else if (_buffer == "elif" ) {RmEOLs; new Elif();}
    else if (_buffer == "for"  ) new For();
    else if (_buffer == "while") new While();
    else if (_buffer == "in"   ) new In();
@@ -57,8 +59,11 @@ void TokenizerFsm::NewId()
    else if (_buffer == "Int"  ) new Int();
    else if (_buffer == "Float") new Float();
    else if (_buffer == "this" ) new This();
-   else if (_buffer == "break" ) new Break();
+   else if (_buffer == "break") new Break();
+   else if (_buffer == "yield") new Yield();
    else if (_buffer == "return" ) new Return();
+   else if (_buffer == "native" ) new Native();
+   else if (_buffer == "static" ) new Static();
    else if (_buffer == "continue" ) new Continue();
    else (new Id())->val = _buffer;
 }
@@ -80,7 +85,7 @@ void TokenizerFsm::OnDigit() {
 }
 void TokenizerFsm::OnDot() {
 	switch(_state) {
-	case TokenizerFsm::Tokenizer__State::number: _state = TokenizerFsm::Tokenizer__State::real_number; { _buffer += Current; ++_idx; } break;
+	case TokenizerFsm::Tokenizer__State::number          : _state = TokenizerFsm::Tokenizer__State::real_number; { _buffer += Current; ++_idx; } break;
 	default: break;
 	}
 }
@@ -175,6 +180,7 @@ void TokenizerFsm::On_() {
       else if (Current == '\\') new Lambda();
 	  else if (Current == ':') { RmEOLs; new Colon(); }
 	  else if (Current == ',') { RmEOLs; new Comma(); }
+	  else if (Current == ';') { bool isEnd = !Token::stack.empty() && Token::stack.back()->t == Tk::EOL; RmEOLs; if (isEnd) new End(); else new Eol(); }
 	  else if (Current == '.') { RmEOLs; new Dot(); }
       else if (Current == '+') { RmEOLs; if (Next == '=') { new AddAsign(); ++_idx; } else new Add(); }
       else if (Current == '-') { RmEOLs; if (Next == '=') { new SubAsign(); ++_idx; } else new Sub(); }

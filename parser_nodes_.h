@@ -63,10 +63,13 @@ enum class Nd {
 #define Push Node::stack.push_back(std::shared_ptr<Node>(this))
 
 struct Node  : token_::Token { Nd st{ Nd::UNKNOWN }; static std::vector<std::shared_ptr<Node>> pool; virtual void accept(IVisitor& v) = 0; virtual ~Node() = default; };
-struct Using         : Node { Using()                  { st=Nd::USING;          Push; } std::vector<std::string> metaPath; bool hasPseudonim{ false }; std::string pseudonim; AVis };
-struct Func          : Node { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; AVis };
-struct Type          : Node { Type(char const*v):id(v) { st=Nd::TYPE;           Push; } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; static Type Int, Float, String; AVis };
-struct VarDefinition : Node { VarDefinition(std::string& name):id(name)
+struct Using         : Node   { Using()                  { st=Nd::USING;          Push; } std::vector<std::string> metaPath; bool hasPseudonim{ false }; std::string pseudonim; AVis };
+struct Func          : Node   { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; bool is_native{ false }; AVis };
+struct Type          : Node   { Type(char const*v,bool push=true):id(v) { st=Nd::TYPE; if(push) { Push; } } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; static Type Int, Float, String; AVis };
+struct TypeOp        : Type   { TypeOp(char const*v):Type(v){ st=Nd::TYPE; stack.pop_back(); } Type* left{ nullptr }; Type* right{ nullptr }; AVis };
+struct Arrow         : TypeOp { Arrow():TypeOp("->")     { Push; } };
+struct Deckard       : TypeOp { Deckard():TypeOp("*")    { Push; } };
+struct VarDefinition : Node   { VarDefinition(std::string& name):id(name)
                                                        { st=Nd::VAR_DEFINITION; Push; } std::string id; Node* val{ nullptr }; bool hasConcreteType{ false }; Type* type{ nullptr }; AVis };
 
 // Expressions
@@ -77,7 +80,7 @@ struct RealNum    : Node { RealNum(double n):val(n)    { st=Nd::REAL_NUM;    t=T
 struct Num        : Node { Num(long n):val(n)          { st=Nd::NUM;         t=Tk::EXPR;       Push; } long   val{  0  }; AVis };
 struct String     : Node { String(std::string&v):val(v){ st=Nd::STRING;      t=Tk::EXPR;       Push; } std::string val; AVis };
 struct Id         : Node { Id    (std::string&v):val(v){ st=Nd::ID;          t=Tk::EXPR;       Push; } std::string val; AVis };
-struct Call       : Node { Call()                      { st=Nd::CALL;        t=Tk::EXPR;       Push; } Node* funcSource{ nullptr }; std::vector<Node*> arguments; AVis };
+struct Call       : Node { Call()                      { st=Nd::CALL;        t=Tk::EXPR;       Push; } Node* funcSource{ nullptr }; std::vector<Node*> arguments; std::vector<std::string> arg_names; AVis };
 struct This       : Node { This()                      { st=Nd::THIS;        t=Tk::EXPR;       Push; } AVis };
 struct EToken     : Node { EToken(Tk type)             { st=Nd::TOK;         t=type;           Push; } AVis };
 
@@ -106,14 +109,14 @@ struct Not   : Node { Not()   { st=Nd::NOT;   t=Tk::NOT; Push; } Node *right{ nu
 
 // Statements
 struct Body     : Node { Body()     { st=Nd::BODY;     Push; } std::vector<Node*> statements; AVis };
-struct If       : Node { If()       { st=Nd::IF;       Push; } Node* prop{ nullptr }; Body* body{ nullptr }; Node* else_prop{ nullptr }; Body* else_body{ nullptr }; AVis };
+struct If       : Node { If()       { st=Nd::IF;       Push; } Node* prop{ nullptr }; Body* body{ nullptr }; Node* else_body{ nullptr }; AVis };
 struct For      : Node { For()      { st=Nd::FOR;      Push; } AVis };
 struct While    : Node { While()    { st=Nd::WHILE;    Push; } Node* prop{ nullptr }; Body* body{ nullptr }; AVis };
 struct Yield    : Node { Yield()    { st=Nd::YIELD;    Push; } bool to_break{ false }; AVis };
 struct Return   : Node { Return()   { st=Nd::RETURN;   Push; } Node* e{ nullptr }; AVis };
 struct Break    : Node { Break()    { st=Nd::BREAK;    Push; } AVis };
 struct Continue : Node { Continue() { st=Nd::CONTINUE; Push; } AVis };
-struct Foreach  : Node { Foreach()  { st=Nd::FOREACH;  Push; } Id* it{ nullptr }; Id* idx{ nullptr }; Node* range{ nullptr }; std::vector<Node*> body; AVis };
+struct Foreach : Node { Foreach() { st = Nd::FOREACH;  Push; } Id* it{ nullptr }; Id* idx{ nullptr }; Node* range{ nullptr }; Body* body{ nullptr }; AVis };
 
 struct Module : Node
 {

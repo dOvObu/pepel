@@ -38,6 +38,7 @@ enum class Tk {
    IF,
    THEN,
    ELSE,
+   ELIF,
    FOR,
    WHILE,
    IN,
@@ -94,6 +95,7 @@ struct This       : public Token { This      () { Token::t = Tk::THIS;      Push
 struct If         : public Token { If        () { Token::t = Tk::IF;        Push; } };
 struct Then       : public Token { Then      () { Token::t = Tk::THEN;      Push; } };
 struct Else       : public Token { Else      () { Token::t = Tk::ELSE;      Push; } };
+struct Elif       : public Token { Elif      () { Token::t = Tk::ELIF;      Push; } };
 struct For        : public Token { For       () { Token::t = Tk::FOR;       Push; } };
 struct While      : public Token { While     () { Token::t = Tk::WHILE;     Push; } };
 struct In         : public Token { In        () { Token::t = Tk::IN;        Push; } };

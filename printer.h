@@ -2,6 +2,7 @@
 #define INCLUDED_PRINTER_H
 #include "ivisitor.h"
 #include "parser_nodes_.h"
+#include <set>
 #include <iostream>
 
 class Printer : public IVisitor
@@ -16,6 +17,8 @@ class Printer : public IVisitor
 
 	void visit(Type& r) override
 	{
+		if (_shown_types.count(&r)) { std::cout << "(type " << r.id << ')'; return; } else _shown_types.insert(&r);
+
 		std::cout << "(type " << r.id << (r.HasParent() ? " " + r.parent->id: "");
 		if (!r.fields.empty()) std::cout << "\n::: fields :::\n";
 		for (auto v : r.fields)
@@ -31,6 +34,15 @@ class Printer : public IVisitor
 		std::cout << ")";
 	}
 
+	void visit(TypeOp& r) override
+	{
+		std::cout << '(';
+		if (r.left) r.left->accept(*this);
+		std::cout << ' ' << r.id << ' ';
+		if (r.right) r.right->accept(*this);
+		std::cout << ')';
+	}
+
 	void visit(Func& r) override
 	{
 		std::cout << "(func " << r.id << "(";
@@ -41,7 +53,8 @@ class Printer : public IVisitor
 			v->accept(*this);
 		}
 		std::cout << ") ";
-		if (r.body != nullptr) r.body->accept(*this);
+		if (r.is_native) std::cout << "native";
+		else if (r.body != nullptr) r.body->accept(*this);
 		std::cout << ")";
 	}
 
@@ -194,8 +207,7 @@ class Printer : public IVisitor
 		std::cout << "(if ";
 		if (r.prop != nullptr) r.prop->accept(*this);
 		if (r.body != nullptr) r.body->accept(*this); else std::cout << "{}";
-		if (r.else_prop != nullptr) { std::cout << " else if "; r.else_prop->accept(*this); if (r.else_body) r.else_body->accept(*this); }
-		else if (r.else_body != nullptr) { std::cout << " else "; r.else_body->accept(*this); }
+		if (r.else_body != nullptr) { std::cout << " else "; r.else_body->accept(*this); }
 		std::cout << ")";
 	}
 
@@ -242,8 +254,7 @@ class Printer : public IVisitor
 		if (r.idx != nullptr) r.idx->accept(*this);
 		std::cout << " : ";
 		r.range->accept(*this);
-		std::cout << " (body \n";
-		for (auto b : r.body) { std::cout << "  "; b->accept(*this); std::cout << std::endl; }
+		r.body->accept(*this);
 		std::cout << ")";
 	}
 
@@ -263,6 +274,7 @@ class Printer : public IVisitor
 	{
 		std::cout << "etoken" << std::endl;
 	}
+	std::set<Type*> _shown_types;
 };
 
 #endif // ! INCLUDED_PRINTER_H //

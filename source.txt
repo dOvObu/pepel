@@ -1,4 +1,7 @@
 
-\ main ()
-	2 + 2 * 2
-/
+type Node
+(
+	\ print()
+		return 5
+	/
+)

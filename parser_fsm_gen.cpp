@@ -1,4 +1,5 @@
 #include <set>
+#include <iostream>
 #include "parser_fsm_gen.h"
 #define Current (*_tokens)[_idx]->t
 #define Prew (_idx > 0 ? (*_tokens)[_idx - 1]->t : Tk::UNKNOWN)
@@ -11,7 +12,7 @@
 #define CurrentTokenAs(TYPE) reinterpret_cast<token_::TYPE*>((*_tokens)[_idx].get())
 #define NextTokenAs(TYPE) reinterpret_cast<token_::TYPE*>((*_tokens)[_idx + 1].get())
 #define LastExprAs(TYPE) reinterpret_cast<TYPE*>(_exprs.back())
-#define LastStmtAs(TYPE) reinterpret_cast<TYPE*>(_statements.back())
+#define LastStmtAs(TYPE) reinterpret_cast<TYPE*>(_bodies.back()->statements.back())
 #define PopNode Node::stack.pop_back()
 using Parser___State = ParserFsm::Parser__State;
 
@@ -71,8 +72,9 @@ Module* ParserFsm::operator()(std::pair< std::vector<std::shared_ptr<token_::Tok
 		if (Next != Tk::NATIVE  ) OnNextNotNative();
 		if (Next != Tk::UNKNOWN && Next != Tk::EOF_) OnNotEOF();
 		if (Next != Tk::END     ) OnNotEnd();
-		if (Next == Tk::COLON   ) OnNextColon();
 		if (Next == Tk::EOL     ) OnNextEOL();
+		if (Next == Tk::COLON   ) OnNextColon();
+		if (Next == Tk::DOT     ) OnNextDot();
 		if (Next == Tk::ASIGN   ) OnNextAsign();
 		if (Next == Tk::COMMA   ) OnNextComma();
 		if (Next == Tk::CLS_PAR ) OnNextClosePar();
@@ -109,6 +111,8 @@ Module* ParserFsm::operator()(std::pair< std::vector<std::shared_ptr<token_::Tok
 		if (Current == Tk:: FOR        ) OnFor();
 		if (Current == Tk:: ID         ) OnId();
 		if (Current == Tk:: IF         ) OnIf();
+		if (Current == Tk:: ELSE       ) OnElse();
+		if (Current == Tk:: ELIF       ) OnElif();
 		if (Current == Tk:: INT        ) OnInt();
 		if (Current == Tk:: LAMBDA     ) OnLambda();
 		if (Current == Tk:: NUM        ) OnNum();
@@ -152,7 +156,7 @@ void ParserFsm::OnAs() {
 }
 void ParserFsm::OnBreak() {
 	switch(_stack.back()) {
-	case Parser___State :: stmt       : Follow; { new Break(); ++_idx; } break;
+	case Parser___State :: stmt       : Follow; { _bodies.back()->statements.push_back(new Break()); ++_idx; } break;
 	case Parser___State :: yield_stmt : Follow; { LastNodeAs(Yield)->to_break = true; ++_idx; } break;
 	default: break;
 	}
@@ -160,47 +164,49 @@ void ParserFsm::OnBreak() {
 void ParserFsm::OnClosePar() {
 	switch(_stack.back()) {
 	case Parser___State :: call_expr        : Follow; if (!_exprs.empty()) { LastNodeAs(Call)->arguments.push_back(_exprs.back()); _exprs.pop_back(); ++_idx; } break;
-	case Parser___State :: else_expr        : Follow; if (!_exprs.empty()) { LastNodeAs(If)->else_prop = _exprs.back(); _exprs.pop_back(); ++_idx; } break;
+	case Parser___State :: elif_expr        : Follow; if (!_exprs.empty()) { _exprs.back(); _exprs.pop_back(); ++_idx; } break;
+	case Parser___State :: type_body        : Follow;                      { ++_idx; } break;
 	//case Parser___State :: expr             : Follow;                      {/* ? */} break;
 	//case Parser___State :: lambda_body      : Follow;                      { for (auto s : LastNodeAs(Body)->statements) LastExprAs(LambdaFunc)->body.push_back(s); _statements.pop_back(); } break;
 	//case Parser___State :: lambda_ret       : Follow;                      { auto e = _exprs.back(); _exprs.pop_back();  LastExprAs(LambdaFunc)->body.push_back(e); } break;
-	case Parser___State :: type_body        : Follow;                      {} break;
+	//case Parser___State :: if_expr          : FollowedBy(then_expr);       { auto e = _exprs.back(); _exprs.pop_back(); LastExprAs(IteExpr)->prop = e; } break;
 
 	case Parser___State :: c_for_stmt       : FollowedBy(for_body);        {} break;
-	case Parser___State :: else_stmt        : FollowedBy(else_body);       { LastStmtAs(If)->else_prop  = _exprs.back();  _exprs.pop_back(); } break;
-	case Parser___State :: foreach_stmt     : FollowedBy(for_body);        { LastStmtAs(Foreach)->range = LastExprAs(Id); _exprs.pop_back(); } break;
-	case Parser___State :: if_expr          : FollowedBy(then_expr);       { auto e = _exprs.back(); _exprs.pop_back(); LastExprAs(IteExpr)->prop = e; } break;
-	case Parser___State :: if_stmt          : FollowedBy(if_body);         { LastStmtAs(If)->prop = _exprs.back(); _exprs.pop_back(); } break;
-	case Parser___State :: method_arguments : FollowedBy(func_body);       { ++_idx; } break;
-	case Parser___State :: func_arguments   : FollowedBy(func_body);       { if (!_exprs.empty()) { _module->functions.back()->arguments.back()->val = _exprs.back(); _exprs.pop_back(); } ++_idx; } break;
-	case Parser___State :: field_def        : Follow;                      {} break;
-	case Parser___State :: while_stmt       : FollowedBy(while_body);      { LastStmtAs(While)->prop = _exprs.back(); _exprs.pop_back(); } break;
+	case Parser___State :: else_stmt        : FollowedBy(if_body);         { If* s = new If(); _ifs.back()->else_body = s; _ifs.pop_back(); _ifs.push_back(s); s->prop = _exprs.back(); _exprs.pop_back(); _bodies.push_back(s->body = new Body()); ++_idx; } break;
+	case Parser___State :: foreach_stmt     : FollowedBy(for_body);        { Foreach* s = LastStmtAs(Foreach); _bodies.push_back(s->body = new Body()); s->range = _exprs.back(); _exprs.pop_back(); ++_idx; } break;
+	case Parser___State :: method_arguments : FollowedBy(func_body);       { ++_idx; if (Current == Tk::ASIGN) { if (_module->types.back()->methods.back()->is_native = Next == Tk::NATIVE) { Follow; _idx += 2; } else { _one_line_func = true; Containes(stmt); Containes(expr); ++_idx; } } } break;
+	case Parser___State :: func_arguments   : FollowedBy(func_body);       { if (!_exprs.empty()) { _module->functions.back()->arguments.back()->val = _exprs.back(); _exprs.pop_back(); } ++_idx; if (Current == Tk::ASIGN) { if (_module->functions.back()->is_native = Next == Tk::NATIVE) { Follow; _idx += 2; } else { _one_line_func = true; Containes(stmt); Containes(expr); ++_idx; } } } break;
+	case Parser___State :: field_def        : Follow;                      { if (_stack.back() == Parser___State::type_body) { _announced_variable->val = _exprs.back(); _announced_variable = nullptr; } else { LastStmtAs(VarDefinition)->val = _exprs.back(); } _exprs.pop_back(); } break;
+	case Parser___State :: variable_def     : Follow;                      { LastStmtAs(VarDefinition)->val = _exprs.back(); _exprs.pop_back(); ++_idx; } break;
+	case Parser___State :: if_stmt          : FollowedBy(if_body);         { If* s{ nullptr }; _ifs.push_back(s = new If()); _bodies.back()->statements.push_back(s); s->prop = _exprs.back(); _exprs.pop_back(); _bodies.push_back(s->body = new Body()); ++_idx; } break;
+	case Parser___State :: stmt             : Follow;                      { if (!(_bodies.empty() || _exprs.empty())) { _bodies.back()->statements.push_back(_exprs.back()); _exprs.pop_back(); if (_one_line_func) { _one_line_func = false; _bodies.pop_back(); Follow; } } else ++_idx; } break;
+	case Parser___State :: while_stmt       : FollowedBy(while_body);      { auto s = new While(); _bodies.back()->statements.push_back(s); _bodies.push_back(s->body = new Body()); s->prop = _exprs.back(); _exprs.pop_back(); ++_idx; } break;
 	default: break;
 	}
 }
 void ParserFsm::OnColon() {
 	switch(_stack.back()) {
 	case Parser___State :: foreach_stmt : Containes(expr);              { LastStmtAs(Foreach)->it = LastExprAs(Id); _exprs.pop_back(); } break;
-	case Parser___State :: type_stmt    : FollowedBy(type_parent_stmt); {} break;
+	case Parser___State :: type_stmt    : FollowedBy(type_parent_stmt); { ++_idx; _module->types.back()->parent->id = CurrentTokenAs(Id)->val; ++_idx; } break;
 	default: break;
 	}
 }
 void ParserFsm::OnComma() {
 	switch(_stack.back()) {
 	case Parser___State :: call_expr        : ;                           {} break;
-	case Parser___State :: else_expr        : Containes(expr);            {} break;
+	case Parser___State :: elif_expr        : Containes(expr);            {} break;
 	//case Parser___State :: expr             : Follow;                     {} break;
 	case Parser___State :: field_def        : Follow;                     {} break;
-	case Parser___State :: func_arguments   : ;      if (!_exprs.empty()) { _module->functions.back()->arguments.back()->val = _exprs.back(); _exprs.pop_back(); } ++_idx; break;
 	case Parser___State :: method_arguments : ;      if (!_exprs.empty()) { _module->types.back()->methods.back()->arguments.back()->val = _exprs.back(); _exprs.pop_back(); } ++_idx; break;
-	case Parser___State :: if_stmt          : FollowedBy(if_body);        {} break;
+	case Parser___State :: func_arguments   : ;      if (!_exprs.empty()) { _module->functions.back()->arguments.back()->val = _exprs.back(); _exprs.pop_back(); } ++_idx; break;
+	//case Parser___State :: if_stmt          : FollowedBy(if_body);        {} break;
 	case Parser___State :: then_expr        : FollowedBy(else_expr);      {} break;
 	default: break;
 	}
 }
 void ParserFsm::OnContinue() {
 	switch(_stack.back()) {
-	case Parser___State :: stmt : Follow; {} break;
+	case Parser___State :: stmt : Follow; { _bodies.back()->statements.push_back(new Continue()); ++_idx; } break;
 	default: break;
 	}
 }
@@ -208,8 +214,8 @@ void ParserFsm::OnDot() {
 	switch(_stack.back()) {
 	case Parser___State :: field_announcement : ;                       {} break;
 	case Parser___State :: lambda_expr        : FollowedBy(lambda_ret); {} break;
-	case Parser___State :: type_parent_stmt   : ;                       {} break;
-	case Parser___State :: using_stmt         : ;                       { LastStmtAs(Using)->metaPath.push_back(LastExprAs(Id)->val); _exprs.pop_back(); ++_idx; } break;
+	case Parser___State :: type_parent_stmt   : ;                       { ++_idx; _module->types.back()->metaPath.push_back(_module->types.back()->id); _module->types.back()->id = CurrentTokenAs(Id)->val; ++_idx; } break;
+	case Parser___State :: using_stmt         : ;                       { _module->dependecies.back()->metaPath.push_back(LastExprAs(Id)->val); _exprs.pop_back(); ++_idx; } break;
 	default: break;
 	}
 }
@@ -227,6 +233,7 @@ void ParserFsm::OnEOF() {
 	case Parser___State :: check_native_func     : Follow;           {} break;
 	case Parser___State :: else_body             : Follow;           {} break;
 	case Parser___State :: else_expr             : Follow;           {} break;
+	case Parser___State :: elif_expr             : Follow;           {} break;
 	case Parser___State :: else_stmt             : Follow;           {} break;
 	case Parser___State :: enumerable_method_def : Follow;           {} break;
 	case Parser___State :: expr                  : Follow;           {} break;
@@ -265,16 +272,22 @@ void ParserFsm::OnEOL() {
 	case Parser___State :: call_expr          : Follow;          {} break;
 	case Parser___State :: expr               : Follow;          {} break;
 	case Parser___State :: field_announcement : Follow;          {} break;
-	case Parser___State :: field_def          : Follow;          {} break;
+	case Parser___State :: field_def          : Follow;          {if (_announced_variable != nullptr && !_exprs.empty()) { _announced_variable->val = _exprs.back(); _exprs.pop_back(); }} break;
+	case Parser___State :: variable_def       : Follow;          {if (_announced_variable != nullptr && !_exprs.empty()) { _announced_variable->val = _exprs.back(); _exprs.pop_back(); }} break;
 	case Parser___State :: lambda_body        : Follow;          {} break;
 	case Parser___State :: lambda_expr        : Follow;          {} break;
 	case Parser___State :: lambda_ret         : Follow;          {} break;
-	case Parser___State :: return_stmt        : Follow;          {} break;
-	case Parser___State :: stmt               : Follow;          {} break;
+	case Parser___State :: return_stmt        : Follow;          { reinterpret_cast<Return*>(_bodies.back()->statements.back())->e = _exprs.back(); _exprs.pop_back(); } break;
+	case Parser___State :: stmt               : Follow;          { if (!(_bodies.empty() || _exprs.empty())) {_bodies.back()->statements.push_back(_exprs.back()); _exprs.pop_back(); if (_one_line_func) {_one_line_func = false; _bodies.pop_back(); Follow;} } else ++_idx; } break;
 	case Parser___State :: using_stmt         : Follow;          { auto p = LastStmtAs(Using); if (!p->hasPseudonim) { p->metaPath.push_back(LastExprAs(Id)->val); _exprs.pop_back(); } _module->dependecies.push_back(p); _statements.pop_back(); ++_idx; } break;
 	case Parser___State :: yield_stmt         : Follow;          {} break;
+	case Parser___State :: type_stmt          : ;                {++_idx;} break;
 	case Parser___State :: statement_of_module: Follow;          {++_idx;} break;
 	case Parser___State :: func_body          : Containes(stmt); {++_idx;} break;
+	case Parser___State :: if_body            : Containes(stmt); {++_idx;} break;
+	case Parser___State :: else_body          : Containes(stmt); {++_idx;} break;
+	case Parser___State :: while_body         : Containes(stmt); {++_idx;} break;
+	case Parser___State :: type_body          : if (Next != Tk::CLS_PAR) Containes(type_stmt); {++_idx;} break;
 	default: break;
 	}
 }
@@ -282,18 +295,19 @@ void ParserFsm::OnEnd() {
 	switch(_stack.back()) {
 	case Parser___State :: body                  : Follow; {} break;
 	case Parser___State :: call_expr             : Follow; {} break;
-	case Parser___State :: else_body             : Follow; {} break;
+	case Parser___State :: variable_def          : Follow; {if (_announced_variable != nullptr && !_exprs.empty()) { _announced_variable->val = _exprs.back(); _exprs.pop_back(); }} break;
 	case Parser___State :: enumerable_method_def : Follow; {} break;
 	case Parser___State :: expr                  : Follow; {} break;
-	case Parser___State :: for_body              : Follow; {} break;
+	case Parser___State :: for_body              : Follow; { ++_idx; _bodies.pop_back(); } break;
 	case Parser___State :: func_body             : Follow; { ++_idx; _bodies.pop_back(); } break;
-	case Parser___State :: if_body               : Follow; {} break;
+	case Parser___State :: if_body               : Follow; { ++_idx; _bodies.pop_back(); } break;
+	case Parser___State :: else_body             : Follow; { ++_idx; _bodies.pop_back(); } break;
+	case Parser___State :: while_body            : Follow; { ++_idx; _bodies.pop_back(); } break;
 	case Parser___State :: lambda_body           : Follow; {} break;
 	case Parser___State :: lambda_expr           : Follow; {} break;
 	case Parser___State :: lambda_ret            : Follow; {} break;
-	case Parser___State :: return_stmt           : Follow; {} break;
-	case Parser___State :: stmt                  : Follow; { auto& b = (*_bodies.back()); if (b == nullptr) b = new Body(); b->statements.push_back(_exprs.back()); _exprs.clear(); } break;
-	case Parser___State :: while_body            : Follow; {} break;
+	case Parser___State :: return_stmt           : Follow; { reinterpret_cast<Return*>(_bodies.back()->statements.back())->e = _exprs.back(); _exprs.pop_back(); } break;
+	case Parser___State :: stmt                  : Follow; { _bodies.back()->statements.push_back(_exprs.back()); _exprs.pop_back(); } break;
 	default: break;
 	}
 }
@@ -313,30 +327,32 @@ void ParserFsm::OnFloat() {
 }
 void ParserFsm::OnFor() {
 	switch(_stack.back()) {
-	case Parser___State :: stmt : FollowedBy(for_stmt); {} break;
+	case Parser___State :: stmt : FollowedBy(for_stmt); { _idx += 2; } break;
 	default: break;
 	}
 }
 void ParserFsm::OnId() {
 	switch(_stack.back()) {
 	//case Parser___State :: expr               : ;                     { _exprs.push_back(new Id(CurrentTokenAs(Id)->val)); ++_idx; } break;
-	case Parser___State :: field_announcement : ;                     {} break;
+	case Parser___State :: field_announcement : ;                     { auto s = CurrentTokenAs(Id)->val.c_str(); _announced_variable->type = _types.count(s)?_types[s]:(_types[s] = new Type(s)); _announced_variable = nullptr; } break;
 	//case Parser___State :: lambda_expr        : ;                     { LastExprAs(LambdaFunc)->arguments.push_back(CurrentTokenAs(Id)->val); ++_idx; } break;
 	case Parser___State :: method_arguments   : Containes(field_def); { _module->types.back()->methods.back()->arguments.push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); } break;
 	case Parser___State :: func_arguments     : Containes(field_def); { _module->functions.back()->arguments.push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); } break;
 	case Parser___State :: method_def         : ;                     { _module->types.back()->methods.back()->id = CurrentTokenAs(Id)->val; ++_idx; } break;
-	case Parser___State :: stmt               : if (Next == Tk::ASIGN) FollowedBy(field_def); else Containes(expr); {} break;
+	case Parser___State :: stmt               : if (Next == Tk::ASIGN || Next == Tk::COLON) { if (Next== Tk::ASIGN) { FollowedBy(variable_def); } else { FollowedBy(variable_announcement); } _bodies.back()->statements.push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); if (_announced_variable->hasConcreteType = Next == Tk::COLON) _idx += 2;} else Containes(expr); break;
 	case Parser___State :: type_body          : Containes(field_def); { (_static_field ? _module->types.back()->staticFields : _module->types.back()->fields).push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); _static_field = false; } break;
 	case Parser___State :: type_parent_stmt   : ;                     {} break;
-	case Parser___State :: type_stmt          : Follow;               {} break;
+	case Parser___State :: type_stmt          : FollowedBy(field_def); { (_static_field ? _module->types.back()->staticFields : _module->types.back()->fields).push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); _static_field = false; } break; //: if (Next == Tk::ASIGN || Next == Tk::COLON) { if (Next== Tk::ASIGN) { FollowedBy(field_def); } else { FollowedBy(field_announcement); } _module->types.back()->fields.push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); if (_announced_variable->hasConcreteType = Next == Tk::COLON) _idx += 2; } break;
 	case Parser___State :: func_stmt          : ;                     { _module->functions.back()->id = CurrentTokenAs(Id)->val; ++_idx; } break;
 	case Parser___State :: using_stmt         : ;                     { _exprs.push_back(new Id(CurrentTokenAs(Id)->val)); ++_idx; } break;
+	case Parser___State :: for_stmt           : FollowedBy(foreach_stmt); Containes(expr);      { Foreach* s{ nullptr }; _bodies.back()->statements.push_back(s = new Foreach()); if (Next == Tk::COLON) { s->it = new Id(CurrentTokenAs(Id)->val); } else if (Next == Tk::COMMA) { s->idx = new Id(CurrentTokenAs(Id)->val); _idx += 2; s->it = new Id(CurrentTokenAs(Id)->val); } _idx += 2; } break;
+	case Parser___State :: func_body          : Containes(stmt); break;
 	default: break;
 	}
 }
 void ParserFsm::OnIdNextColon() {
 	switch(_stack.back()) {
-	case Parser___State :: call_expr : Containes(exprt); {} break;
+	case Parser___State :: call_expr : Containes(exprt); { } break;
 	default: break;
 	}
 }
@@ -348,14 +364,28 @@ void ParserFsm::OnNextComma() {
 }
 void ParserFsm::OnNextClosePar() {
 	switch (_stack.back()) {
-	case Parser___State::field_def : Follow; { ++_idx; } break;
+	case Parser___State :: field_def          : Follow; { if (_stack.back() == Parser___State::type_body && !_exprs.empty()) { _module->types.back()->fields.back()->val = _exprs.back(); _exprs.pop_back(); _announced_variable = nullptr; } ++_idx; } break;
+	case Parser___State :: field_announcement : Follow; { if (Current == Tk::INT) { _announced_variable->type = &Type::Int; } else if (Current == Tk::FLOAT) { _announced_variable->type = &Type::Float; } else if (Current == Tk::STR) { _announced_variable->type = &Type::String; } else if (Current == Tk::ID) { auto s = CurrentTokenAs(Id)->val.c_str(); _announced_variable->type = _types.count(s)?_types[s]:(_types[s] = new Type(s)); } _announced_variable = nullptr; ++_idx; } break;
 	default: break;
 	}
 }
 void ParserFsm::OnIf() {
 	switch(_stack.back()) {
-	//case Parser___State :: expr : Containes(if_expr);  {} break;
-	case Parser___State :: stmt : FollowedBy(if_stmt); {} break;
+	case Parser___State :: stmt : FollowedBy(if_stmt); { Containes(expr); _idx += 2; } break;
+	default: break;
+	}
+}
+void ParserFsm::OnElif() {
+	switch(_stack.back()) {
+	case Parser___State :: stmt    : Follow;                {} break;
+	case Parser___State :: if_body : FollowedBy(else_stmt); { Containes(expr); _idx += 2; _bodies.pop_back(); } break;
+	default: break;
+	}
+}
+void ParserFsm::OnElse() {
+	switch(_stack.back()) {
+	case Parser___State :: stmt    : Follow;                {} // ASSERT(_stack.back() == Parser___State::if_body);
+	case Parser___State :: if_body : FollowedBy(else_body); { _bodies.pop_back(); _bodies.push_back(new Body()); _ifs.back()->else_body = _bodies.back(); _ifs.pop_back(); ++_idx; } break;
 	default: break;
 	}
 }
@@ -368,8 +398,9 @@ void ParserFsm::OnInt() {
 void ParserFsm::OnLambda() {
 	switch(_stack.back()) {
 	//case Parser___State :: expr                : Containes(lambda_expr); { _exprs.push_back(new LambdaFunc()); ++_idx; } break;
-	case Parser___State :: statement_of_module : Containes(func_stmt);   { _module->functions.push_back(new Func()); _bodies.push_back(&_module->functions.back()->body); ++_idx; } break;
-	case Parser___State :: type_body           : Containes(method_def);  { _module->types.back()->methods.push_back(new Func()); ++_idx; } break;
+	case Parser___State :: statement_of_module : Containes(func_stmt);   { _module->functions.push_back(new Func()); _bodies.push_back(_module->functions.back()->body = new Body()); ++_idx; } break;
+	case Parser___State :: type_stmt           : Follow;
+	case Parser___State :: type_body           : Containes(method_def);  { _module->types.back()->methods.push_back(new Func()); _bodies.push_back(_module->types.back()->methods.back()->body = new Body()); ++_idx; } break;
 	case Parser___State :: stmt                : Containes(expr);        {} break;
 	default: break;
 	}
@@ -383,16 +414,26 @@ void ParserFsm::OnNextColon() {
 }
 void ParserFsm::OnNextEOL() {
 	switch(_stack.back()) {
-	case Parser___State :: func_body : if (Current != Tk::END) Containes(body); {} break;
+	case Parser___State :: field_announcement : Follow; { _announced_variable = nullptr; _idx += 2; } break;
+	case Parser___State :: func_body          : if (Current != Tk::END) Containes(body); {} break;
 	default: break;
 	}
 }
 void ParserFsm::OnNextAsign() {
 	switch(_stack.back()) {
-	case Parser___State :: field_def           : Containes(expr);              { _idx += 2; } break;
-	case Parser___State :: func_body           : Containes(check_native_func); {} break;
-	case Parser___State :: statement_of_module : Containes(global_const);      {} break;
-	case Parser___State :: stmt                : FollowedBy(field_def);        {} break;
+	case Parser___State :: func_body             : Containes(check_native_func); {} break;
+	case Parser___State :: statement_of_module   : Containes(global_const);      {} break;
+	case Parser___State :: stmt                  : FollowedBy(field_def);        {} break;
+	case Parser___State :: field_def             : Containes(expr);              { _idx += 2; } break;
+	case Parser___State :: variable_def          : Containes(expr);              { _idx += 2; } break;
+	case Parser___State :: field_announcement    : FollowedBy(field_def);        { if (Current == Tk::ID) {if (_announced_variable->type == nullptr) { auto s = CurrentTokenAs(Id)->val.c_str(); _announced_variable->type = _types.count(s)?_types[s]:(_types[s] = new Type(s)); } else {_announced_variable->type->metaPath.push_back(_announced_variable->type->id); _announced_variable->type->id = CurrentTokenAs(Id)->val;} } else if (Current == Tk::INT) _announced_variable->type = &Type::Int; else if (Current == Tk::FLOAT) _announced_variable->type = &Type::Float; else if (Current == Tk::STR) _announced_variable->type = &Type::String; } break;
+	case Parser___State :: variable_announcement : FollowedBy(variable_def);     { if (Current == Tk::ID) {if (_announced_variable->type == nullptr) { auto s = CurrentTokenAs(Id)->val.c_str(); _announced_variable->type = _types.count(s)?_types[s]:(_types[s] = new Type(s)); } else {_announced_variable->type->metaPath.push_back(_announced_variable->type->id); _announced_variable->type->id = CurrentTokenAs(Id)->val;} } else if (Current == Tk::INT) _announced_variable->type = &Type::Int; else if (Current == Tk::FLOAT) _announced_variable->type = &Type::Float; else if (Current == Tk::STR) _announced_variable->type = &Type::String; } break;
+	default: break;
+	}
+}
+void ParserFsm::OnNextDot() {
+	switch(_stack.back()) {
+	case Parser___State :: variable_announcement : ; { if (Current == Tk::ID) {if (_announced_variable->type == nullptr) {auto s = CurrentTokenAs(Id)->val.c_str(); _announced_variable->type = _types.count(s)?_types[s]:(_types[s] = new Type(s)); } else {_announced_variable->type->metaPath.push_back(_announced_variable->type->id); _announced_variable->type->id = CurrentTokenAs(Id)->val;} } } break;
 	default: break;
 	}
 }
@@ -432,8 +473,8 @@ void ParserFsm::OnOpenPar() {
 	switch(_stack.back()) {
 	case Parser___State :: method_def       : FollowedBy(method_arguments); { ++_idx; } break;
 	case Parser___State :: func_stmt        : FollowedBy(func_arguments);   { ++_idx; } break;
-	case Parser___State :: type_parent_stmt : FollowedBy(type_body);        {} break;
-	case Parser___State :: type_stmt        : FollowedBy(type_body);        {} break;
+	case Parser___State :: type_parent_stmt : FollowedBy(type_body);        { ++_idx; } break;
+	case Parser___State :: type_stmt        : FollowedBy(type_body);        { ++_idx; } break;
 	case Parser___State :: else_stmt        : Containes(expr);              {} break;
 	case Parser___State :: if_expr          : Containes(expr);              {} break;
 	case Parser___State :: if_stmt          : Containes(expr);              {} break;
@@ -491,7 +532,7 @@ void ParserFsm::OnRealNum() {
 }
 void ParserFsm::OnReturn() {
 	switch(_stack.back()) {
-	case Parser___State :: stmt       : FollowedBy(return_stmt); {} break;
+	case Parser___State :: stmt       : FollowedBy(return_stmt); { _bodies.back()->statements.push_back(new Return()); if (!(Next == Tk::EOL || Next == Tk::END)) Containes(expr); else Follow; ++_idx; } break;
 	case Parser___State :: yield_stmt : Containes(expr);         {} break;
 	default: break;
 	}
@@ -524,14 +565,14 @@ void ParserFsm::OnString() {
 }
 void ParserFsm::OnThis() {
 	switch(_stack.back()) {
-	case Parser___State :: expr : ;                 {} break;
+	case Parser___State :: expr : ;                {} break;
 	case Parser___State :: stmt : Containes(expr); {} break;
 	default: break;
 	}
 }
 void ParserFsm::OnType() {
 	switch(_stack.back()) {
-	case Parser___State :: statement_of_module : Containes(type_stmt); {} break;
+	case Parser___State :: statement_of_module : Containes(type_stmt); { ++_idx; auto s = CurrentTokenAs(Id)->val.c_str(); _module->types.push_back(_types[s] = new Type(s)); ++_idx; } break;
 	default: break;
 	}
 }
@@ -543,7 +584,7 @@ void ParserFsm::OnUsing() {
 }
 void ParserFsm::OnWhile() {
 	switch(_stack.back()) {
-	case Parser___State :: stmt : FollowedBy(while_stmt); {} break;
+	case Parser___State :: stmt : FollowedBy(while_stmt); { Containes(expr); _idx += 2; } break;
 	default: break;
 	}
 }
@@ -588,6 +629,17 @@ int WordStartsWithRule(std::vector<Node*> const & word, std::vector<ParserFsm::R
 
 void ParserFsm::ParseExpr()
 {
+	ParseByRules(rules, power);
+}
+
+
+void ParserFsm::ParseType()
+{
+	//ParseByRules(type_rules, type_power);
+}
+
+void ParserFsm::ParseByRules(std::vector<RulePair>& rules, int* power)
+{
 	size_t& j = _idx;
 	int parenthesis = 0;
 	while (_stack.back() == Parser___State::expr)
@@ -595,14 +647,17 @@ void ParserFsm::ParseExpr()
 		auto c = (*_tokens)[j++].get();
 		if (c->t == Tk::EOL && parenthesis > 0) continue;
 		if (c->t == Tk::EOF_) { _stack.pop_back(); break; }
-
+		{
+			auto c2 = (*_tokens)[j]->t;
+			if (c2 == Tk::ELIF || c2 == Tk::ELSE) { _stack.pop_back(); break; }
+		}
 		token_::Token* a = (j >= _tokens->size() ? nullptr : (*_tokens)[j].get());
 
-		if      (c->t == Tk::NUM)      _exprs.push_back(new ::Num    (reinterpret_cast<token_::Number *>(c)->val));
+		if (c->t == Tk::NUM)      _exprs.push_back(new ::Num(reinterpret_cast<token_::Number*>(c)->val));
 		else if (c->t == Tk::REAL_NUM) _exprs.push_back(new ::RealNum(reinterpret_cast<token_::RealNum*>(c)->val));
-		else if (c->t == Tk::STRING)   _exprs.push_back(new ::String (reinterpret_cast<token_::String *>(c)->val));
-		else if (c->t == Tk::ID)       _exprs.push_back(new ::Id     (reinterpret_cast<token_::Id     *>(c)->val));
-		else if (c->t == Tk::THIS)     _exprs.push_back(new ::This   ());
+		else if (c->t == Tk::STRING)   _exprs.push_back(new ::String(reinterpret_cast<token_::String*>(c)->val));
+		else if (c->t == Tk::ID)       _exprs.push_back(new ::Id(reinterpret_cast<token_::Id*>(c)->val));
+		else if (c->t == Tk::THIS)     _exprs.push_back(new ::This());
 		else _exprs.push_back(new EToken(c->t));
 
 		for (size_t i = 0; _exprs.size() > i;)
@@ -613,7 +668,7 @@ void ParserFsm::ParseExpr()
 			if (n != -1)
 			{
 				int p = power[n];
-				_exprs2.push_back(new EToken(a == nullptr? Tk::UNKNOWN : a->t));
+				_exprs2.push_back(new EToken(a == nullptr ? Tk::UNKNOWN : a->t));
 				int p2 = p;
 				for (size_t k = 0; _exprs2.size() > k; ++k)
 				{
@@ -635,10 +690,10 @@ void ParserFsm::ParseExpr()
 		Tk curr = (*_tokens)[j]->t;
 		if (curr == Tk::OPN_PAR) ++parenthesis;
 		if (curr == Tk::CLS_PAR) --parenthesis;
-		if (curr == Tk::EOF_ || (parenthesis == 0 && (curr == Tk::EOL || curr == Tk::END || curr == Tk::COMMA)) || 0 > parenthesis) _stack.pop_back();
+		if (curr == Tk::EOF_ || (parenthesis == 0 && (curr == Tk::EOL || curr == Tk::END || curr == Tk::COMMA)) || 0 > parenthesis) { _stack.pop_back(); }
+		//if (parenthesis < 0 && (*_tokens)[_idx-1]->t == Tk::CLS_PAR && _stack.back() != Parser___State::expr) --_idx;
 	}
 }
-
 
 
 
@@ -681,10 +736,10 @@ void ParserFsm::On_not_EOF_or_End_or_OrNextComma() {
 	}
 }
 void ParserFsm::On_not_EOL_or_EOF() {
-	switch(_stack.back()) {
-	case Parser___State :: return_stmt : FollowedBy(expr); {} break;
-	default: break;
-	}
+	//switch(_stack.back()) {
+	//case Parser___State :: return_stmt : FollowedBy(expr); {} break;
+	//default: break;
+	//}
 }
 
 Node* cb_Parenthesis(std::vector<Node*>& v)
