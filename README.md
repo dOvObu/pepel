@@ -1,7 +1,7 @@
 # pepel
 
 Примеры
-
+```
 \ main()
   print("Oh, hi")
 /
@@ -33,3 +33,4 @@ type List
   \ printList3() print(value); next.printList3(); /
   \ show() = print(value)
 )
+```
