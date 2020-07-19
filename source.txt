@@ -3,26 +3,5 @@
 
 
 \main()
-   addF(test2, test3, test)
+   print("hello, console)")
 /
-
-\test()
-   print("test2 is completed")
-/
-
-\addF(f1, f2, f)
-   print("addF called")
-   f1(f)
-   f2(f)
-/
-
-\test2(f)
-   print("test2 called")
-   f()
-/
-
-\test3(f)
-   print("test3 called")
-   f()
-/
-

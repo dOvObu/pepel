@@ -4,6 +4,7 @@
 #include "parser_fsm_gen.h"
 #include "interpreter.h"
 #include "printer.h"
+#include <string>
 #include <vector>
 
 
@@ -20,14 +21,14 @@ void printNode(Interpreter& ctx, Node* a)
    case Nd::STRING:
       std::cout << reinterpret_cast<String*>(a)->val << std::endl;
       break;
-   case Nd::ID: {
+   case Nd::ID:
+   {
       auto t3 = ctx.GetDefOf(reinterpret_cast<Id*>(a)->val.c_str());
       if (std::get<0>(t3) != nullptr && std::get<0>(t3)->val != nullptr)
       {
          printNode(ctx, std::get<0>(t3)->val);
       }
-   }
-      break;
+   }  break;
    default:
       break;
    }
@@ -44,18 +45,28 @@ void print(Interpreter& ctx, size_t n)
 }
 
 
-int main()
+int main(int argc, char *argv[])
 {
-	auto res = ParserFsm{}(TokenizerFsm{}("source.txt"));
-	Printer p;
-	res->accept(p);
-   std::cout << std::endl;
+   std::string src = "source.txt";
 
-   Interpreter i;
-   i.native_f["print"] = print;
-   res->accept(i);
+   if (argc > 1)
+      src = argv[1];
 
-   std::cin.get();
+   while (true)
+   {
+      system("cls");
+	   auto res = ParserFsm{}(TokenizerFsm{}(src.c_str()));
+	   //Printer p;
+	   //res->accept(p);
+      //std::cout << std::endl;
+
+      Interpreter i;
+      i.native_f["print"] = print;
+      res->accept(i);
+      std::cin.get();
+      Node::pool.clear();
+      Node::stack.clear();
+   }
 	std::cout << std::endl;
 
 	return 0;

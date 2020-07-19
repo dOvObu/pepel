@@ -76,9 +76,9 @@ struct VarDefinition : Node   { VarDefinition(std::string& name):id(name)
 struct LambdaFunc : Node { LambdaFunc()                { st=Nd::LAMBDA_FUNC; t=Tk::EXPR;       Push; } std::vector<Node*> arguments;  Node* body{ nullptr }; AVis };
 struct IteExpr    : Node { IteExpr()                   { st=Nd::ITE_EXPR;    t=Tk::EXPR;       Push; } Node* prop{ nullptr }; Node* passed{ nullptr }; Node* fall{ nullptr }; AVis };
 struct FwExpr     : Node { FwExpr()                    { st=Nd::FW_EXPR;     t=Tk::EXPR;       Push; } Node* itemOp{ nullptr }; Node* id{ nullptr }; Node* idxId{ nullptr }; Node* source{ nullptr }; Node* prop{ nullptr }; AVis };
-struct RealNum    : Node { RealNum(double n):val(n)    { st=Nd::REAL_NUM;    t=Tk::EXPR;       Push; } double val{ 0.0 }; AVis };
-struct Num        : Node { Num(long n):val(n)          { st=Nd::NUM;         t=Tk::EXPR;       Push; } long   val{  0  }; AVis };
-struct String     : Node { String(std::string&v):val(v){ st=Nd::STRING;      t=Tk::EXPR;       Push; } std::string val; AVis };
+struct RealNum    : Node { RealNum(double n):val(n)    { st=Nd::REAL_NUM;    t=Tk::EXPR;       Push; } double val{ 0.0 }; AVis RealNum(){} RealNum*removable(double v){ val=v; t=Tk::RMVBL; st=Nd::REAL_NUM; return this; } };
+struct Num        : Node { Num(long n):val(n)          { st=Nd::NUM;         t=Tk::EXPR;       Push; } long   val{  0  }; AVis Num    (){} Num*    removable(long   v){ val=v; t=Tk::RMVBL; st=Nd::NUM; return this; } };
+struct String     : Node { String(std::string&v):val(v){ st=Nd::STRING;      t=Tk::EXPR;       Push; } std::string val;   AVis String (){} String* removable(std::string const& v){ val=v; t=Tk::RMVBL; st=Nd::STRING; return this; } };
 struct Id         : Node { Id    (std::string&v):val(v){ st=Nd::ID;          t=Tk::EXPR;       Push; } std::string val; AVis };
 struct Call       : Node { Call()                      { st=Nd::CALL;        t=Tk::EXPR;       Push; } Node* funcSource{ nullptr }; std::vector<Node*> arguments; std::vector<std::string> arg_names; AVis };
 struct This       : Node { This()                      { st=Nd::THIS;        t=Tk::EXPR;       Push; } AVis };

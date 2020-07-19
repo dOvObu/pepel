@@ -35,6 +35,7 @@ enum class Tk {
    EQUAL,
    THIS,
    EXPR,
+   RMVBL,
    IF,
    THEN,
    ELSE,
@@ -85,6 +86,8 @@ struct Add        : public Token { Add       () { Token::t = Tk::ADD;       Push
 struct Sub        : public Token { Sub       () { Token::t = Tk::SUB;       Push; } };
 struct Mul        : public Token { Mul       () { Token::t = Tk::MUL;       Push; } };
 struct Div        : public Token { Div       () { Token::t = Tk::DIV;       Push; } };
+struct And        : public Token { And       () { Token::t = Tk::AND;       Push; } };
+struct Or         : public Token { Or        () { Token::t = Tk::OR;        Push; } };
 struct AddAsign   : public Token { AddAsign  () { Token::t = Tk::ADD_ASIGN; Push; } };
 struct SubAsign   : public Token { SubAsign  () { Token::t = Tk::SUB_ASIGN; Push; } };
 struct MulAsign   : public Token { MulAsign  () { Token::t = Tk::MUL_ASIGN; Push; } };

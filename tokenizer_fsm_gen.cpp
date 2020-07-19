@@ -43,6 +43,8 @@ std::pair<std::vector<std::shared_ptr<Token>>&, char const*> TokenizerFsm::opera
 void TokenizerFsm::NewId()
 {
    if      (_buffer == "using") new Using();
+   else if (_buffer == "and"  ) new And();
+   else if (_buffer == "or"   ) new Or();
    else if (_buffer == "type" ) new Type();
    else if (_buffer == "this" ) new This();
    else if (_buffer == "if"   ) new If();

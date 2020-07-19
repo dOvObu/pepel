@@ -128,7 +128,17 @@ private:
       {
          if (f->is_native)
          {
+            auto args_ended = expr_stack.size();
+            auto args_started = args_ended - f->arguments.size();
             native_f[f->id.c_str()](*this, f->arguments.size());
+            for (size_t i = args_started; args_ended > i; ++i)
+            {
+               if (expr_stack[i]->t == Tk::RMVBL) delete expr_stack[i];
+            }
+            if (args_ended > args_started)
+            {
+               expr_stack.erase(std::begin(expr_stack) + args_started, std::begin(expr_stack) + args_ended);
+            }
          }
          else
          {
@@ -139,6 +149,75 @@ private:
 
    void visit(BinOp& n) override
    {
+      n.left->accept(*this);
+      auto l = expr_stack.back();
+      n.right->accept(*this);
+      auto r = expr_stack.back();
+
+      if (l->st == Nd::NUM && r->st == Nd::NUM)
+      {
+         auto lv = reinterpret_cast<Num*>(l)->val; lose(l);
+         auto rv = reinterpret_cast<Num*>(r)->val; lose(r);
+         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
+         {
+            long res = 0;
+            if      (n.st == Nd::ADD) res = lv +  rv;
+            else if (n.st == Nd::SUB) res = lv -  rv;
+            else if (n.st == Nd::MUL) res = lv *  rv;
+            else if (n.st == Nd::DIV) res = lv /  rv;
+            else if (n.st == Nd::AND) res = lv && rv;
+            else if (n.st == Nd::OR ) res = lv || rv;
+            expr_stack.push_back((new Num())->removable(res));
+         }
+      }
+      else if (l->st == Nd::REAL_NUM && r->st == Nd::REAL_NUM)
+      {
+         auto lv = reinterpret_cast<RealNum*>(l)->val; lose(l);
+         auto rv = reinterpret_cast<RealNum*>(r)->val; lose(r);
+         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
+         {
+            double res = 0;
+            if (n.st == Nd::ADD) res = lv + rv;
+            else if (n.st == Nd::SUB) res = lv - rv;
+            else if (n.st == Nd::MUL) res = lv * rv;
+            else if (n.st == Nd::DIV) res = lv / rv;
+            else if (n.st == Nd::AND) res = lv && rv;
+            else if (n.st == Nd::OR) res = lv || rv;
+            expr_stack.push_back((new RealNum())->removable(res));
+         }
+      }
+      else if (l->st == Nd::REAL_NUM)
+      {
+         auto lv = reinterpret_cast<RealNum*>(l)->val; lose(l);
+         auto rv = reinterpret_cast<Num*>(r)->val; lose(r);
+         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
+         {
+            double res = 0;
+            if (n.st == Nd::ADD) res = lv + rv;
+            else if (n.st == Nd::SUB) res = lv - rv;
+            else if (n.st == Nd::MUL) res = lv * rv;
+            else if (n.st == Nd::DIV) res = lv / rv;
+            else if (n.st == Nd::AND) res = lv && rv;
+            else if (n.st == Nd::OR) res = lv || rv;
+            expr_stack.push_back((new RealNum())->removable(res));
+         }
+      }
+      else if (r->st == Nd::REAL_NUM)
+      {
+         auto lv = reinterpret_cast<Num*>(l)->val; lose(l);
+         auto rv = reinterpret_cast<RealNum*>(r)->val; lose(r);
+         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
+         {
+            double res = 0;
+            if (n.st == Nd::ADD) res = lv + rv;
+            else if (n.st == Nd::SUB) res = lv - rv;
+            else if (n.st == Nd::MUL) res = lv * rv;
+            else if (n.st == Nd::DIV) res = lv / rv;
+            else if (n.st == Nd::AND) res = lv && rv;
+            else if (n.st == Nd::OR) res = lv || rv;
+            expr_stack.push_back((new RealNum())->removable(res));
+         }
+      }
    }
 
    void visit(Sequence& n) override
@@ -220,6 +299,15 @@ private:
    {
    }
 
+
+   void lose(Node* n)
+   {
+      if (n->t == Tk::RMVBL)
+      {
+         delete n;
+      }
+      expr_stack.pop_back();
+   }
 public:
    Func* TryGetFuncBySrcNode(Node* src)
    {
@@ -287,6 +375,10 @@ public:
                      if (vis_area[j].count(name) != 0)
                      {
                         deeper = vis_area[j][name]->val;
+                        if (deeper->st == Nd::ID && reinterpret_cast<Id*>(deeper)->val == name)
+                        {
+                           continue;
+                        }
                         break;
                      }
                      if (j == 0)
