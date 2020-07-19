@@ -70,7 +70,7 @@ struct TypeOp        : Type   { TypeOp(char const*v):Type(v){ st=Nd::TYPE; stack
 struct Arrow         : TypeOp { Arrow():TypeOp("->")     { Push; } };
 struct Deckard       : TypeOp { Deckard():TypeOp("*")    { Push; } };
 struct VarDefinition : Node   { VarDefinition(std::string& name):id(name)
-                                                       { st=Nd::VAR_DEFINITION; Push; } std::string id; Node* val{ nullptr }; bool hasConcreteType{ false }; Type* type{ nullptr }; AVis };
+                                                       { st=Nd::VAR_DEFINITION; Push; } VarDefinition():id(""){} std::string id; Node* val{ nullptr }; bool hasConcreteType{ false }; Type* type{ nullptr }; AVis };
 
 // Expressions
 struct LambdaFunc : Node { LambdaFunc()                { st=Nd::LAMBDA_FUNC; t=Tk::EXPR;       Push; } std::vector<Node*> arguments;  Node* body{ nullptr }; AVis };

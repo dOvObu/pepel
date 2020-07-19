@@ -2,21 +2,61 @@
 #include "final_state_machine_generator.h"
 #include "tokenizer_fsm_gen.h"
 #include "parser_fsm_gen.h"
+#include "interpreter.h"
 #include "printer.h"
 #include <vector>
+
+
+void printNode(Interpreter& ctx, Node* a)
+{
+   switch (a->st)
+   {
+   case Nd::NUM:
+      std::cout << reinterpret_cast<Num*>(a)->val << std::endl;
+      break;
+   case Nd::REAL_NUM:
+      std::cout << reinterpret_cast<RealNum*>(a)->val << std::endl;
+      break;
+   case Nd::STRING:
+      std::cout << reinterpret_cast<String*>(a)->val << std::endl;
+      break;
+   case Nd::ID: {
+      auto t3 = ctx.GetDefOf(reinterpret_cast<Id*>(a)->val.c_str());
+      if (std::get<0>(t3) != nullptr && std::get<0>(t3)->val != nullptr)
+      {
+         printNode(ctx, std::get<0>(t3)->val);
+      }
+   }
+      break;
+   default:
+      break;
+   }
+}
+
+void print(Interpreter& ctx, size_t n)
+{
+   auto sz = ctx.expr_stack.size();
+   for (int i = sz - n; sz > i; ++i)
+   {
+      auto a = ctx.expr_stack[i];
+      printNode(ctx, a);
+   }
+}
 
 
 int main()
 {
 	auto res = ParserFsm{}(TokenizerFsm{}("source.txt"));
-	//std::cout << "Module '" << res->name << '\'' << std::endl;
-	//std::cout << "include size [" << res->dependecies.size() << ']' << std::endl;
-	//std::cout << "func size [" << res->functions.size() << ']' << std::endl;
-	//std::cout << "type size [" << res->types.size() << ']' << std::endl;
 	Printer p;
 	res->accept(p);
+   std::cout << std::endl;
+
+   Interpreter i;
+   i.native_f["print"] = print;
+   res->accept(i);
+
+   std::cin.get();
 	std::cout << std::endl;
-	//std::cin.get();
 
 	return 0;
 }
