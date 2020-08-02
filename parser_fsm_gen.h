@@ -21,6 +21,7 @@ Node* cb_ITE        (std::vector<Node*>& v);
 Node* cb_For        (std::vector<Node*>& v);
 Node* cb_Where      (std::vector<Node*>& v);
 Node* cb_Lambda     (std::vector<Node*>& v);
+Node* cb_Template   (std::vector<Node*>& v);
 
 
 struct ParserFsm
@@ -83,26 +84,20 @@ struct ParserFsm
 
 	{{Tk::EXPR, Tk::OPN_PAR, Tk::EXPR, Tk::CLS_PAR}, cb_Call},    {{Tk::EXPR, Tk::OPN_PAR, Tk::CLS_PAR}, cb_VoidCall},  {{Tk::EXPR, Tk::IF, Tk::EXPR, Tk::ELSE, Tk::EXPR}, cb_ITE},
 	{{Tk::EXPR, Tk::FOR, Tk::EXPR, Tk::FROM, Tk::EXPR}, cb_For},  {{Tk::EXPR, Tk::WHERE, Tk::EXPR}, cb_Where}, {{Tk::LAMBDA, Tk::EXPR, Tk::DOT, Tk::EXPR}, cb_Lambda}, {{Tk::EXPR, Tk::COMMA, Tk::EXPR}, cb_Sequence},
+   {{Tk::EXPR, Tk::NOT, Tk::EXPR}, cb_Template},
 	};
 
-	int power[16] = {
+	int power[17] = {
 	      8      ,
-		   7     ,
+		  7       ,
 	    6 , 6    ,
 	    5 , 5    ,
 	    3,4,3    ,
 	    2,2,2    ,
 	   1,1,2,1   ,
+         2      ,
 	}     ;
 
-	//std::vector<RulePair> type_rules{
-	//	{{Tk::EXPR, Tk::DOT, Tk::EXPR}, cb_PathBinOp},
-	//	{{Tk::EXPR, Tk::SUB, Tk::EXPR}, cb_ArrowBinOp},
-	//	{{Tk::EXPR, Tk::MUL, Tk::EXPR}, cb_TupleBinOp},
-	//};
-	//
-	//int type_power[2] = {
-	//};
 
 	Parser__State State() { return _stack.back(); }
 

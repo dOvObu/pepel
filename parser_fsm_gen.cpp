@@ -146,6 +146,19 @@ Module* ParserFsm::operator()(std::pair< std::vector<std::shared_ptr<token_::Tok
 //		}
 	}
 
+   for (auto f : _module->functions)
+   {
+      _module->dfunctions[f->id] = f;
+   }
+
+   for (auto t : _module->types)
+   {
+      _module->dtypes[t->id] = t;
+      for (auto f : t->fields) t->dfields[f->id] = f;
+      for (auto f : t->staticFields) t->dstaticFields[f->id] = f;
+      for (auto m : t->methods) t->dmethods[m->id] = m;
+   }
+
 	return _module;
 }
 void ParserFsm::OnAs() {
@@ -658,6 +671,9 @@ void ParserFsm::ParseByRules(std::vector<RulePair>& rules, int* power)
 		else if (c->t == Tk::STRING)   _exprs.push_back(new ::String(reinterpret_cast<token_::String*>(c)->val));
 		else if (c->t == Tk::ID)       _exprs.push_back(new ::Id(reinterpret_cast<token_::Id*>(c)->val));
 		else if (c->t == Tk::THIS)     _exprs.push_back(new ::This());
+      else if (c->t == Tk::INT)      _exprs.push_back(&   ::Type::Int);
+      else if (c->t == Tk::FLOAT)    _exprs.push_back(&   ::Type::Float);
+      else if (c->t == Tk::STR)      _exprs.push_back(&   ::Type::String);
 		else _exprs.push_back(new EToken(c->t));
 
 		for (size_t i = 0; _exprs.size() > i;)
@@ -744,20 +760,29 @@ void ParserFsm::On_not_EOL_or_EOF() {
 
 Node* cb_Parenthesis(std::vector<Node*>& v)
 {
-	v.pop_back();
+	v.pop_back(); // )
 	auto e = v.back();
 	v.pop_back();
-	v.pop_back();
+	v.pop_back(); // (
 	return e;
 }
 Node* cb_MulBinOp(std::vector<Node*>& v)
 {
+	auto right = v.back();
+	v.pop_back();
+	v.pop_back(); // *
+   auto left = v.back();
+	v.pop_back();
+   if (left->st == Nd::TYPE || right->st == Nd::TYPE)
+   {
+      auto e = Deckard();
+      e->left = reinterpret_cast<Type*>(left);
+      e->right = reinterpret_cast<Type*>(right);
+      return e;
+   }
 	auto e = Mul();
-	e->right = v.back();
-	v.pop_back();
-	v.pop_back();
-	e->left = v.back();
-	v.pop_back();
+   e->left = left;
+   e->right = right;
 	return e;
 }
 Node* cb_DivBinOp(std::vector<Node*>& v)
@@ -782,12 +807,21 @@ Node* cb_AddBinOp(std::vector<Node*>& v)
 }
 Node* cb_SubBinOp(std::vector<Node*>& v)
 {
+   auto right = v.back();
+	v.pop_back();
+	v.pop_back();
+   auto left = v.back();
+	v.pop_back();
+   if (left->st == Nd::TYPE || right->st == Nd::TYPE)
+   {
+      auto e = Arrow();
+      e->left = reinterpret_cast<Type*>(left);
+      e->right = reinterpret_cast<Type*>(right);
+      return e;
+   }
 	auto e = Sub();
-	e->right = v.back();
-	v.pop_back();
-	v.pop_back();
-	e->left = v.back();
-	v.pop_back();
+	e->right = right;
+	e->left = left;
 	return e;
 }
 Node* cb_DotBinOp(std::vector<Node*>& v)
@@ -928,4 +962,8 @@ Node* cb_Lambda(std::vector<Node*>& v)
 	v.pop_back();
 	v.pop_back();
 	return e;
+}
+
+Node* cb_Template(std::vector<Node*>& v)
+{
 }

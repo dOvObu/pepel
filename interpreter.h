@@ -2,19 +2,15 @@
 #define INCLUDED_INTERPRETER_H
 #include "ivisitor.h"
 #include "parser_nodes_.h"
+#include "tokenizer_fsm_gen.h"
 #include <iostream>
 #include <vector>
 #include <string>
 #include <map>
 
-class Interpreter : public IVisitor
+struct Interpreter : public IVisitor
 {
-public:
-   std::vector<std::map<std::string, VarDefinition*>> vis_area_v;
-   std::vector<Node*> expr_stack;
-   std::vector<std::map<std::string, Func*>> vis_area_f;
-   std::vector<std::map<std::string, Type*>> vis_area_t;
-   std::map<std::string, void(*)(Interpreter&, size_t)> native_f;
+   std::map<std::string, Module*> modules;
 private:
    void visit(Using& n) override
    {
@@ -30,38 +26,6 @@ private:
 
    void visit(Func& n) override
    {
-      vis_area_v.push_back({});
-      auto& vav = vis_area_v.back();
-      auto args = new VarDefinition[n.arguments.size()];
-      for (size_t i = 0; n.arguments.size() > i; ++i)
-      {
-         args[i].id = n.arguments[i]->id;
-         args[i].val = expr_stack[expr_stack.size() - n.arguments.size() + i];
-         vav[args[i].id] = args + i;
-      }
-      for (size_t i = 0; n.arguments.size() > i; ++i)
-      {
-         expr_stack.pop_back();
-      }
-
-      if (n.is_native)
-      {
-         if (native_f.count(n.id) == 0)
-         {
-            native_f[n.id](*this, n.arguments.size());
-         }
-         else
-         {
-            std::cerr << "Error! There is no native function called " << n.id << "!!1\n";
-         }
-      }
-      else
-      {
-         n.body->accept(*this);
-      }
-
-      delete[] args;
-      vis_area_v.pop_back();
    }
 
    void visit(VarDefinition& n) override
@@ -82,22 +46,18 @@ private:
 
    void visit(Num& n) override
    {
-      expr_stack.push_back(&n);
    }
 
    void visit(RealNum& n) override
    {
-      expr_stack.push_back(&n);
    }
 
    void visit(String& n) override
    {
-      expr_stack.push_back(&n);
    }
 
    void visit(Id& n) override
    {
-      expr_stack.push_back(&n);
    }
 
    void visit(This& n) override
@@ -106,118 +66,10 @@ private:
 
    void visit(Call& n) override
    {
-      n.funcSource->accept(*this);
-      auto src = expr_stack.back();
-      expr_stack.pop_back();
-
-      for (auto a : n.arguments)
-      {
-         a->accept(*this);
-      }
-
-      Func* f = nullptr;
-      char const* id = nullptr;
-
-      f = TryGetFuncBySrcNode(src);
-
-      if (f == nullptr)
-      {
-         std::cerr << "Error! There must to be a function with id \"" << id << "\" to call it!";
-      }
-      else
-      {
-         if (f->is_native)
-         {
-            auto args_ended = expr_stack.size();
-            auto args_started = args_ended - f->arguments.size();
-            native_f[f->id.c_str()](*this, f->arguments.size());
-            for (size_t i = args_started; args_ended > i; ++i)
-            {
-               if (expr_stack[i]->t == Tk::RMVBL) delete expr_stack[i];
-            }
-            if (args_ended > args_started)
-            {
-               expr_stack.erase(std::begin(expr_stack) + args_started, std::begin(expr_stack) + args_ended);
-            }
-         }
-         else
-         {
-            f->accept(*this);
-         }
-      }
    }
 
    void visit(BinOp& n) override
    {
-      n.left->accept(*this);
-      auto l = expr_stack.back();
-      n.right->accept(*this);
-      auto r = expr_stack.back();
-
-      if (l->st == Nd::NUM && r->st == Nd::NUM)
-      {
-         auto lv = reinterpret_cast<Num*>(l)->val; lose(l);
-         auto rv = reinterpret_cast<Num*>(r)->val; lose(r);
-         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
-         {
-            long res = 0;
-            if      (n.st == Nd::ADD) res = lv +  rv;
-            else if (n.st == Nd::SUB) res = lv -  rv;
-            else if (n.st == Nd::MUL) res = lv *  rv;
-            else if (n.st == Nd::DIV) res = lv /  rv;
-            else if (n.st == Nd::AND) res = lv && rv;
-            else if (n.st == Nd::OR ) res = lv || rv;
-            expr_stack.push_back((new Num())->removable(res));
-         }
-      }
-      else if (l->st == Nd::REAL_NUM && r->st == Nd::REAL_NUM)
-      {
-         auto lv = reinterpret_cast<RealNum*>(l)->val; lose(l);
-         auto rv = reinterpret_cast<RealNum*>(r)->val; lose(r);
-         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
-         {
-            double res = 0;
-            if (n.st == Nd::ADD) res = lv + rv;
-            else if (n.st == Nd::SUB) res = lv - rv;
-            else if (n.st == Nd::MUL) res = lv * rv;
-            else if (n.st == Nd::DIV) res = lv / rv;
-            else if (n.st == Nd::AND) res = lv && rv;
-            else if (n.st == Nd::OR) res = lv || rv;
-            expr_stack.push_back((new RealNum())->removable(res));
-         }
-      }
-      else if (l->st == Nd::REAL_NUM)
-      {
-         auto lv = reinterpret_cast<RealNum*>(l)->val; lose(l);
-         auto rv = reinterpret_cast<Num*>(r)->val; lose(r);
-         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
-         {
-            double res = 0;
-            if (n.st == Nd::ADD) res = lv + rv;
-            else if (n.st == Nd::SUB) res = lv - rv;
-            else if (n.st == Nd::MUL) res = lv * rv;
-            else if (n.st == Nd::DIV) res = lv / rv;
-            else if (n.st == Nd::AND) res = lv && rv;
-            else if (n.st == Nd::OR) res = lv || rv;
-            expr_stack.push_back((new RealNum())->removable(res));
-         }
-      }
-      else if (r->st == Nd::REAL_NUM)
-      {
-         auto lv = reinterpret_cast<Num*>(l)->val; lose(l);
-         auto rv = reinterpret_cast<RealNum*>(r)->val; lose(r);
-         if (n.st == Nd::ADD || n.st == Nd::SUB || n.st == Nd::MUL || n.st == Nd::DIV || n.st == Nd::AND || n.st == Nd::OR)
-         {
-            double res = 0;
-            if (n.st == Nd::ADD) res = lv + rv;
-            else if (n.st == Nd::SUB) res = lv - rv;
-            else if (n.st == Nd::MUL) res = lv * rv;
-            else if (n.st == Nd::DIV) res = lv / rv;
-            else if (n.st == Nd::AND) res = lv && rv;
-            else if (n.st == Nd::OR) res = lv || rv;
-            expr_stack.push_back((new RealNum())->removable(res));
-         }
-      }
    }
 
    void visit(Sequence& n) override
@@ -278,138 +130,96 @@ private:
 
    void visit(Module& n) override
    {
-      vis_area_f.push_back({});
-      vis_area_t.push_back({});
-      auto& vaf = vis_area_f.back();
-      auto& vat = vis_area_t.back();
-
-      for (auto f : n.functions)
-      {
-         vaf[f->id] = f;
-      }
-      for (auto t : n.types)
-      {
-         vat[t->id] = t;
-      }
-
-      vaf["main"]->accept(*this);
+      HandleDependencies(n);
+      n.dfunctions["main"]->accept(*this);
    }
 
    void visit(EToken& n) override
    {
    }
 
-
-   void lose(Node* n)
+   void HandleDependencies(Module& n)
    {
-      if (n->t == Tk::RMVBL)
+      for (auto u : n.dependecies)
       {
-         delete n;
-      }
-      expr_stack.pop_back();
-   }
-public:
-   Func* TryGetFuncBySrcNode(Node* src)
-   {
-      Func* f = nullptr;
-      if (src->st == Nd::ID)
-      {
-         auto id = reinterpret_cast<Id*>(src)->val.c_str();
-         auto t3 = GetDefOf(id);
-         if (std::get<1>(t3) != nullptr)
-         {
-            f = std::get<1>(t3);
-         }
-         else if (std::get<0>(t3) != nullptr && std::get<0>(t3)->val != nullptr)
-         {
-            f = TryGetFuncBySrcNode(std::get<0>(t3)->val);
-         }
-      }
-      else if (src->st == Nd::FUNC)
-      {
-         f = reinterpret_cast<Func*>(src);
-      }
+         auto& moduleName = u->metaPath[0];
+         auto pathLength = u->metaPath.size();
 
-      return f;
-   }
-
-   template<typename T>
-   T* GetDefOfT(char const* name, std::vector<std::map<std::string, T*>>& vis_area)
-   {
-      T* res = nullptr;
-
-      for (size_t i = vis_area.size() - 1;; --i)
-      {
-         if (vis_area[i].count(name) != 0)
+         if (modules.count(moduleName) == 0)
          {
-            res = vis_area[i][name];
-            break;
+            modules[moduleName] = ParserFsm{}(TokenizerFsm{}((moduleName + ".txt").c_str()));
+            HandleDependencies(*modules[moduleName]);
          }
 
-         if (i == 0)
+         if (pathLength == 2)
          {
-            break;
-         }
-      }
-      return res;
-   }
-
-   template<>
-   VarDefinition* GetDefOfT<VarDefinition>(char const* name, std::vector<std::map<std::string, VarDefinition*>>& vis_area)
-   {
-      VarDefinition* res = nullptr;
-
-      for (size_t i = vis_area.size() - 1;; --i)
-      {
-         if (vis_area[i].count(name) != 0)
-         {
-            res = vis_area[i][name];
-            if (res->val->st == Nd::ID)
+            auto moduleUsed = modules[moduleName];
+            if (moduleUsed->dfunctions.count(u->metaPath[1]))
             {
-               auto id = reinterpret_cast<Id*>(res->val)->val;
-               if (id == name)
+               if (u->hasPseudonim)
                {
-                  Node* deeper = nullptr;
-                  for (size_t j = i - 1;; --j)
-                  {
-                     if (vis_area[j].count(name) != 0)
-                     {
-                        deeper = vis_area[j][name]->val;
-                        if (deeper->st == Nd::ID && reinterpret_cast<Id*>(deeper)->val == name)
-                        {
-                           continue;
-                        }
-                        break;
-                     }
-                     if (j == 0)
-                     {
-                        break;
-                     }
-                  }
-                  if (deeper != nullptr)
-                  {
-                     res->val = deeper;
-                  }
+                  n.context.funcs[u->pseudonim] = moduleUsed->dfunctions[u->metaPath[1]];
+               }
+               else
+               {
+                  auto f = moduleUsed->dfunctions[u->metaPath[1]];
+                  n.context.funcs[f->id] = f;
                }
             }
-            break;
+            else if (moduleUsed->dtypes.count(u->metaPath[1]))
+            {
+               if (u->hasPseudonim)
+               {
+                  n.context.types[u->pseudonim] = moduleUsed->dtypes[u->metaPath[1]];
+               }
+               else
+               {
+                  auto t = moduleUsed->dtypes[u->metaPath[1]];
+                  n.context.types[t->id] = t;
+               }
+            }
+            else
+            {
+               std::cerr << "ERROR! There is must to be some type or function with id: \'" << u->metaPath[1] << "\' in module \'" << moduleName << "\' to use it in \'" << n.name << "\' module\n" << std::endl;
+            }
          }
 
-         if (i == 0)
+         if (pathLength == 3)
          {
-            break;
+            if (u->hasPseudonim)
+            {
+               auto moduleUsed = modules[moduleName];
+
+               if (moduleUsed->dtypes.count(u->metaPath[1]))
+               {
+                  auto t = moduleUsed->dtypes[u->metaPath[1]];
+                  if (t != &Type::Int && t != &Type::Float && t != &Type::String)
+                  {
+                     if (t->dstaticFields.count(u->metaPath[2]))
+                     {
+                        if (u->hasPseudonim)
+                        {
+                           n.context.staticVars[u->pseudonim] = t->dstaticFields[u->metaPath[2]];
+                        }
+                        else
+                        {
+                           auto var = t->dstaticFields[u->metaPath[2]];
+                           n.context.staticVars[var->id] = var;
+                        }
+                     }
+                     else
+                     {
+                        std::cerr << "ERROR! There is must to be static field in \'" << moduleName << "." << t->id << "\' type to use it\n";
+                     }
+                  }
+               }
+               else
+               {
+                  std::cerr << "ERROR! There is must to be some type with static fields and id: \'" << u->metaPath[1] << "\' in module \'" << moduleName << "\' to use it in \'" << n.name << "\' module\n" << std::endl;
+               }
+            }
          }
       }
-      return res;
-   }
-
-   std::tuple<VarDefinition*, Func*, Type*> GetDefOf(char const* name)
-   {
-      return {
-         GetDefOfT(name, vis_area_v),
-         GetDefOfT(name, vis_area_f),
-         GetDefOfT(name, vis_area_t),
-      };
    }
 };
 

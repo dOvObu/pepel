@@ -62,30 +62,35 @@ enum class Nd {
 #define AVis void accept(IVisitor& v) { v.visit(*this); }
 #define Push Node::stack.push_back(std::shared_ptr<Node>(this))
 
+struct Context
+{
+   std::map<std::string, struct Type*> types;
+   std::map<std::string, struct Func*> funcs;
+   std::map<std::string, struct VarDefinition*> staticVars;
+};
+
 struct Node  : token_::Token { Nd st{ Nd::UNKNOWN }; static std::vector<std::shared_ptr<Node>> pool; virtual void accept(IVisitor& v) = 0; virtual ~Node() = default; };
 struct Using         : Node   { Using()                  { st=Nd::USING;          Push; } std::vector<std::string> metaPath; bool hasPseudonim{ false }; std::string pseudonim; AVis };
 struct Func          : Node   { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; bool is_native{ false }; AVis };
-struct Type          : Node   { Type(char const*v,bool push=true):id(v) { st=Nd::TYPE; if(push) { Push; } } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; static Type Int, Float, String; AVis };
-struct TypeOp        : Type   { TypeOp(char const*v):Type(v){ st=Nd::TYPE; stack.pop_back(); } Type* left{ nullptr }; Type* right{ nullptr }; AVis };
-struct Arrow         : TypeOp { Arrow():TypeOp("->")     { Push; } };
-struct Deckard       : TypeOp { Deckard():TypeOp("*")    { Push; } };
+struct Type          : Node   { Type(char const*v,bool push=true):id(v) { st=Nd::TYPE; t=Tk::EXPR; if(push) { Push; } } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; std::map<std::string, Func*> dmethods; std::map<std::string, struct VarDefinition*> dfields; std::map<std::string, struct VarDefinition*> dstaticFields; static Type Int, Float, String; AVis };
+struct TypeOp        : Type   { TypeOp(char const*v):Type(v,false) { st=Nd::TYPE; Push; } Type* left{ nullptr }; Type* right{ nullptr }; AVis };
 struct VarDefinition : Node   { VarDefinition(std::string& name):id(name)
                                                        { st=Nd::VAR_DEFINITION; Push; } VarDefinition():id(""){} std::string id; Node* val{ nullptr }; bool hasConcreteType{ false }; Type* type{ nullptr }; AVis };
 
 // Expressions
-struct LambdaFunc : Node { LambdaFunc()                { st=Nd::LAMBDA_FUNC; t=Tk::EXPR;       Push; } std::vector<Node*> arguments;  Node* body{ nullptr }; AVis };
-struct IteExpr    : Node { IteExpr()                   { st=Nd::ITE_EXPR;    t=Tk::EXPR;       Push; } Node* prop{ nullptr }; Node* passed{ nullptr }; Node* fall{ nullptr }; AVis };
+struct LambdaFunc : Node { LambdaFunc()                { st=Nd::LAMBDA_FUNC; t=Tk::EXPR;       Push; } std::vector<Node*> arguments;  Node* body{ nullptr }; Type* type{ new TypeOp("->") };  AVis };
+struct IteExpr    : Node { IteExpr()                   { st=Nd::ITE_EXPR;    t=Tk::EXPR;       Push; } Node* prop{ nullptr }; Node* passed{ nullptr }; Node* fall{ nullptr }; Type* type{ nullptr };  AVis };
 struct FwExpr     : Node { FwExpr()                    { st=Nd::FW_EXPR;     t=Tk::EXPR;       Push; } Node* itemOp{ nullptr }; Node* id{ nullptr }; Node* idxId{ nullptr }; Node* source{ nullptr }; Node* prop{ nullptr }; AVis };
-struct RealNum    : Node { RealNum(double n):val(n)    { st=Nd::REAL_NUM;    t=Tk::EXPR;       Push; } double val{ 0.0 }; AVis RealNum(){} RealNum*removable(double v){ val=v; t=Tk::RMVBL; st=Nd::REAL_NUM; return this; } };
-struct Num        : Node { Num(long n):val(n)          { st=Nd::NUM;         t=Tk::EXPR;       Push; } long   val{  0  }; AVis Num    (){} Num*    removable(long   v){ val=v; t=Tk::RMVBL; st=Nd::NUM; return this; } };
-struct String     : Node { String(std::string&v):val(v){ st=Nd::STRING;      t=Tk::EXPR;       Push; } std::string val;   AVis String (){} String* removable(std::string const& v){ val=v; t=Tk::RMVBL; st=Nd::STRING; return this; } };
-struct Id         : Node { Id    (std::string&v):val(v){ st=Nd::ID;          t=Tk::EXPR;       Push; } std::string val; AVis };
+struct RealNum    : Node { RealNum(double n)    :val(n){ st=Nd::REAL_NUM;    t=Tk::EXPR;       Push; } double val{ 0.0 }; AVis        RealNum () {}          Type* type{ &Type::Float  }; RealNum*removable(double v){ val=v; t=Tk::RMVBL; st=Nd::REAL_NUM; return this; } };
+struct Num        : Node { Num(long n)          :val(n){ st=Nd::NUM;         t=Tk::EXPR;       Push; } long   val{  0  }; AVis        Num     () {}          Type* type{ &Type::Int    }; Num*    removable(long   v){ val=v; t=Tk::RMVBL; st=Nd::NUM; return this; } };
+struct String     : Node { String(std::string&v):val(v){ st=Nd::STRING;      t=Tk::EXPR;       Push; } std::string val;   AVis        String  () {}          Type* type{ &Type::String }; String* removable(std::string const& v){ val=v; t=Tk::RMVBL; st=Nd::STRING; return this; } };
+struct Id         : Node { Id    (std::string&v):val(v){ st=Nd::ID;          t=Tk::EXPR;       Push; } std::string val;   AVis };
 struct Call       : Node { Call()                      { st=Nd::CALL;        t=Tk::EXPR;       Push; } Node* funcSource{ nullptr }; std::vector<Node*> arguments; std::vector<std::string> arg_names; AVis };
 struct This       : Node { This()                      { st=Nd::THIS;        t=Tk::EXPR;       Push; } AVis };
-struct EToken     : Node { EToken(Tk type)             { st=Nd::TOK;         t=type;           Push; } AVis };
+struct EToken     : Node { EToken(Tk token_type)       { st=Nd::TOK;         t=token_type;     Push; } AVis };
 
 // Binary Operators
-struct BinOp : Node { BinOp(Nd nd, Tk tk) { st = nd; t = tk; Push; } Node *left{ nullptr }, *right{ nullptr }; AVis };
+struct BinOp : Node { BinOp(Nd nd, Tk tk) { st = nd; t = tk; Push; } Node *left{ nullptr }, *right{ nullptr }; Type* type{ nullptr }; AVis };
 static BinOp* Dot      () { return new BinOp(Nd::DOT,       Tk::EXPR); }
 static BinOp* Add      () { return new BinOp(Nd::ADD,       Tk::EXPR); }
 static BinOp* Sub      () { return new BinOp(Nd::SUB,       Tk::EXPR); }
@@ -100,12 +105,14 @@ static BinOp* AddAsign () { return new BinOp(Nd::ADD_ASIGN, Tk::EXPR); }
 static BinOp* SubAsign () { return new BinOp(Nd::SUB_ASIGN, Tk::EXPR); }
 static BinOp* MulAsign () { return new BinOp(Nd::MUL_ASIGN, Tk::EXPR); }
 static BinOp* DivAsign () { return new BinOp(Nd::DIV_ASIGN, Tk::EXPR); }
-struct Sequence : Node { Sequence() { st = Nd::SEQ; t = Tk::EXPR; Push; } std::vector<Node*> items; AVis };
+static TypeOp*Arrow    () { return new TypeOp("->"); }
+static TypeOp*Deckard  () { return new TypeOp("*"); }
+struct Sequence : Node { Sequence() { st = Nd::SEQ; t = Tk::EXPR; Push; } std::vector<Node*> items; Type* type{ nullptr }; AVis };
 
 // Unary Operators
-struct Plus  : Node { Plus()  { st=Nd::PLUS;  t=Tk::ADD; Push; } Node *right{ nullptr }; AVis };
-struct Minus : Node { Minus() { st=Nd::MINUS; t=Tk::SUB; Push; } Node *right{ nullptr }; AVis };
-struct Not   : Node { Not()   { st=Nd::NOT;   t=Tk::NOT; Push; } Node *right{ nullptr }; AVis };
+struct Plus  : Node { Plus()  { st=Nd::PLUS;  t=Tk::ADD; Push; } Node *right{ nullptr }; Type* type{ nullptr }; AVis };
+struct Minus : Node { Minus() { st=Nd::MINUS; t=Tk::SUB; Push; } Node *right{ nullptr }; Type* type{ nullptr }; AVis };
+struct Not   : Node { Not()   { st=Nd::NOT;   t=Tk::NOT; Push; } Node *right{ nullptr }; Type* type{ nullptr }; AVis };
 
 // Statements
 struct Body     : Node { Body()     { st=Nd::BODY;     Push; } std::vector<Node*> statements; AVis };
@@ -116,7 +123,8 @@ struct Yield    : Node { Yield()    { st=Nd::YIELD;    Push; } bool to_break{ fa
 struct Return   : Node { Return()   { st=Nd::RETURN;   Push; } Node* e{ nullptr }; AVis };
 struct Break    : Node { Break()    { st=Nd::BREAK;    Push; } AVis };
 struct Continue : Node { Continue() { st=Nd::CONTINUE; Push; } AVis };
-struct Foreach : Node { Foreach() { st = Nd::FOREACH;  Push; } Id* it{ nullptr }; Id* idx{ nullptr }; Node* range{ nullptr }; Body* body{ nullptr }; AVis };
+struct Foreach  : Node { Foreach() { st = Nd::FOREACH;  Push; } Id* it{ nullptr }; Id* idx{ nullptr }; Node* range{ nullptr }; Body* body{ nullptr }; AVis };
+
 
 struct Module : Node
 {
@@ -124,6 +132,10 @@ struct Module : Node
 	std::vector<Using*> dependecies;
 	std::vector<Func*> functions;
 	std::vector<Type*> types;
+	std::map<std::string, Func*> dfunctions;
+	std::map<std::string, Type*> dtypes;
+
+   Context context;
 
 	Module(std::string name) { this->name = name.substr(0, name.size() - 4); Push; }
 	AVis
