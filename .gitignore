@@ -2,3 +2,13 @@
 /pepel.vcxproj.filters
 /pepel.vcxproj.user
 /Debug/*
+/.vs/pepel/v16/.suo
+/.vs/pepel/v16/Browse.VC.db
+/.vs/pepel/v16/Browse.VC.opendb
+/.vs/pepel/v16/ipch/AutoPCH/547dfe1e24afffff/TOKENIZER_FSM_GEN.ipch
+/.vs/pepel/v16/ipch/AutoPCH/6a06153a4c4ec104/PARSER_NODE.ipch
+/.vs/pepel/v16/ipch/AutoPCH/8e404fcff619b8d7/MAIN.ipch
+/.vs/pepel/v16/ipch/AutoPCH/cdbda54f7f89dbb/PLAYER_FSM_GEN.ipch
+/.vs/pepel/v16/ipch/AutoPCH/de8f1fca68b9e077/PARSER_FSM_GEN.ipch
+/pepel.sln
+/std.txt
