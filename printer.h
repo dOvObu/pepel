@@ -34,14 +34,21 @@ class Printer : public IVisitor
 		std::cout << ")";
 	}
 
+
+   void visit(TType& r) override
+   {
+      std::cout << "(unknown type)";
+   }
+
 	void visit(TypeOp& r) override
 	{
-		std::cout << '(';
-		if (r.left) r.left->accept(*this);
-		std::cout << ' ' << r.id << ' ';
-		if (r.right) r.right->accept(*this);
-		std::cout << ')';
+      std::cout << "(type " << r.ToStr() << ')';
 	}
+
+   void visit(TypeSeq& r) override
+   {
+      std::cout << "(type " << r.ToStr() << ')';
+   }
 
 	void visit(Func& r) override
 	{
@@ -120,7 +127,7 @@ class Printer : public IVisitor
 
 	void visit(Id& r) override
 	{
-		std::cout << "(id " << r.val << ")";
+      std::cout << "(id " << r.val << (r.type == nullptr? "" : ":" + r.type->ToStr()) << ")";
 	}
 
 	void visit(This& r) override

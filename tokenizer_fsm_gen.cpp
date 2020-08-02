@@ -18,6 +18,7 @@ std::pair<std::vector<std::shared_ptr<Token>>&, char const*> TokenizerFsm::opera
 
    _size = text_from_file.size();
    _src = &text_from_file;
+   Token::StartModule();
 
    while (_size > _idx)
    {

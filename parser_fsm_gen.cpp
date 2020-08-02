@@ -1,6 +1,7 @@
 #include <set>
 #include <iostream>
 #include "parser_fsm_gen.h"
+size_t ParserFsm::_idx{ 0 };
 #define Current (*_tokens)[_idx]->t
 #define Prew (_idx > 0 ? (*_tokens)[_idx - 1]->t : Tk::UNKNOWN)
 #define Next (_size > _idx + 1 ? (*_tokens)[_idx + 1]->t : Tk::UNKNOWN)
@@ -21,8 +22,9 @@ Module* ParserFsm::operator()(std::pair< std::vector<std::shared_ptr<token_::Tok
 	_module = new Module(tokens.second);
 	_size = tokens.first.size();
 	_tokens = &tokens.first;
-	_idx = 0;
-	std::set<Tk> binOp{
+   while (Current != Tk::CALL_START) ++_idx; ++_idx;
+	
+   std::set<Tk> binOp{
 		Tk::DOT,
 		Tk::ADD,
 		Tk::SUB,
@@ -67,6 +69,7 @@ Module* ParserFsm::operator()(std::pair< std::vector<std::shared_ptr<token_::Tok
 
 	while (State() != Parser__State::stop)
 	{
+
 		if (State() == Parser__State::expr) ParseExpr();
 
 		if (Next != Tk::NATIVE  ) OnNextNotNative();
@@ -146,24 +149,28 @@ Module* ParserFsm::operator()(std::pair< std::vector<std::shared_ptr<token_::Tok
 //		}
 	}
 
+   _module->context.root = true;
+
    for (auto f : _module->functions)
    {
       _module->dfunctions[f->id] = f;
+      f->context = &_module->context;
    }
 
    for (auto t : _module->types)
    {
       _module->dtypes[t->id] = t;
-      for (auto f : t->fields) t->dfields[f->id] = f;
-      for (auto f : t->staticFields) t->dstaticFields[f->id] = f;
-      for (auto m : t->methods) t->dmethods[m->id] = m;
+      t->context = &_module->context;
+      for (auto f : t->fields) { t->dfields[f->id] = f; }
+      for (auto f : t->staticFields) { t->dstaticFields[f->id] = f; }
+      for (auto m : t->methods) { (t->dmethods[m->id] = m)->context = &_module->context; }
    }
 
 	return _module;
 }
 void ParserFsm::OnAs() {
 	switch(_stack.back()) {
-	case Parser___State :: using_stmt : Follow; { auto p = LastStmtAs(Using); p->metaPath.push_back(LastExprAs(Id)->val); _exprs.pop_back(); p->hasPseudonim = true; p->pseudonim = NextTokenAs(Id)->val; _module->dependecies.push_back(p); _statements.pop_back(); _idx += 3; } break;
+	case Parser___State :: using_stmt : Follow; { _module->dependecies.back()->hasPseudonim = true; ++_idx; } break;
 	default: break;
 	}
 }
@@ -228,7 +235,7 @@ void ParserFsm::OnDot() {
 	case Parser___State :: field_announcement : ;                       {} break;
 	case Parser___State :: lambda_expr        : FollowedBy(lambda_ret); {} break;
 	case Parser___State :: type_parent_stmt   : ;                       { ++_idx; _module->types.back()->metaPath.push_back(_module->types.back()->id); _module->types.back()->id = CurrentTokenAs(Id)->val; ++_idx; } break;
-	case Parser___State :: using_stmt         : ;                       { _module->dependecies.back()->metaPath.push_back(LastExprAs(Id)->val); _exprs.pop_back(); ++_idx; } break;
+	case Parser___State :: using_stmt         : ;                       { ++_idx; } break;
 	default: break;
 	}
 }
@@ -292,8 +299,8 @@ void ParserFsm::OnEOL() {
 	case Parser___State :: lambda_ret         : Follow;          {} break;
 	case Parser___State :: return_stmt        : Follow;          { reinterpret_cast<Return*>(_bodies.back()->statements.back())->e = _exprs.back(); _exprs.pop_back(); } break;
 	case Parser___State :: stmt               : Follow;          { if (!(_bodies.empty() || _exprs.empty())) {_bodies.back()->statements.push_back(_exprs.back()); _exprs.pop_back(); if (_one_line_func) {_one_line_func = false; _bodies.pop_back(); Follow;} } else ++_idx; } break;
-	case Parser___State :: using_stmt         : Follow;          { auto p = LastStmtAs(Using); if (!p->hasPseudonim) { p->metaPath.push_back(LastExprAs(Id)->val); _exprs.pop_back(); } _module->dependecies.push_back(p); _statements.pop_back(); ++_idx; } break;
 	case Parser___State :: yield_stmt         : Follow;          {} break;
+	case Parser___State :: using_stmt         : Follow;          {++_idx;} break;
 	case Parser___State :: type_stmt          : ;                {++_idx;} break;
 	case Parser___State :: statement_of_module: Follow;          {++_idx;} break;
 	case Parser___State :: func_body          : Containes(stmt); {++_idx;} break;
@@ -357,7 +364,7 @@ void ParserFsm::OnId() {
 	case Parser___State :: type_parent_stmt   : ;                     {} break;
 	case Parser___State :: type_stmt          : FollowedBy(field_def); { (_static_field ? _module->types.back()->staticFields : _module->types.back()->fields).push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); _static_field = false; } break; //: if (Next == Tk::ASIGN || Next == Tk::COLON) { if (Next== Tk::ASIGN) { FollowedBy(field_def); } else { FollowedBy(field_announcement); } _module->types.back()->fields.push_back(_announced_variable = new VarDefinition(CurrentTokenAs(Id)->val)); if (_announced_variable->hasConcreteType = Next == Tk::COLON) _idx += 2; } break;
 	case Parser___State :: func_stmt          : ;                     { _module->functions.back()->id = CurrentTokenAs(Id)->val; ++_idx; } break;
-	case Parser___State :: using_stmt         : ;                     { _exprs.push_back(new Id(CurrentTokenAs(Id)->val)); ++_idx; } break;
+	case Parser___State :: using_stmt         : ;                     { if (!_module->dependecies.back()->hasPseudonim) _module->dependecies.back()->metaPath.push_back(CurrentTokenAs(Id)->val); else _module->dependecies.back()->pseudonim = CurrentTokenAs(Id)->val; ++_idx; } break;
 	case Parser___State :: for_stmt           : FollowedBy(foreach_stmt); Containes(expr);      { Foreach* s{ nullptr }; _bodies.back()->statements.push_back(s = new Foreach()); if (Next == Tk::COLON) { s->it = new Id(CurrentTokenAs(Id)->val); } else if (Next == Tk::COMMA) { s->idx = new Id(CurrentTokenAs(Id)->val); _idx += 2; s->it = new Id(CurrentTokenAs(Id)->val); } _idx += 2; } break;
 	case Parser___State :: func_body          : Containes(stmt); break;
 	default: break;
@@ -591,7 +598,7 @@ void ParserFsm::OnType() {
 }
 void ParserFsm::OnUsing() {
 	switch(_stack.back()) {
-	case Parser___State :: statement_of_module : Containes(using_stmt); { _statements.push_back(new Using()); ++_idx; } break;
+	case Parser___State :: statement_of_module : Containes(using_stmt); { _module->dependecies.push_back(new Using()); ++_idx; } break;
 	default: break;
 	}
 }
@@ -773,12 +780,21 @@ Node* cb_MulBinOp(std::vector<Node*>& v)
 	v.pop_back(); // *
    auto left = v.back();
 	v.pop_back();
-   if (left->st == Nd::TYPE || right->st == Nd::TYPE)
+
+   if (left->st == Nd::TYPE || left->st == Nd::TYPE_SEQ || right->st == Nd::TYPE)
    {
-      auto e = Deckard();
-      e->left = reinterpret_cast<Type*>(left);
-      e->right = reinterpret_cast<Type*>(right);
-      return e;
+      if (left->st != Nd::TYPE_SEQ)
+      {
+         auto e = Deckard();
+         e->seq.push_back(reinterpret_cast<Type*>(left));
+         e->seq.push_back(reinterpret_cast<Type*>(right));
+         return e;
+      }
+      else
+      {
+         reinterpret_cast<TypeSeq*>(left)->seq.push_back(reinterpret_cast<Type*>(right));
+         return left;
+      }
    }
 	auto e = Mul();
    e->left = left;
@@ -962,8 +978,4 @@ Node* cb_Lambda(std::vector<Node*>& v)
 	v.pop_back();
 	v.pop_back();
 	return e;
-}
-
-Node* cb_Template(std::vector<Node*>& v)
-{
 }

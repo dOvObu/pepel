@@ -1,13 +1,16 @@
 #ifndef INCLUDED_PARSER_NODES_H
 #define INCLUDED_PARSER_NODES_H
+#include <iostream>
 #include <memory>
 #include <string>
+#include <map>
 #include "tokens_.h"
 #include "ivisitor.h"
 
 enum class Nd {
 	USING,
 	TYPE,
+	TYPE_SEQ,
 	FUNC,
 	VAR_DEFINITION,
 
@@ -66,14 +69,17 @@ struct Context
 {
    std::map<std::string, struct Type*> types;
    std::map<std::string, struct Func*> funcs;
-   std::map<std::string, struct VarDefinition*> staticVars;
+   std::map<std::string, struct VarDefinition*> vars;
+   bool root{ false };
 };
 
 struct Node  : token_::Token { Nd st{ Nd::UNKNOWN }; static std::vector<std::shared_ptr<Node>> pool; virtual void accept(IVisitor& v) = 0; virtual ~Node() = default; };
 struct Using         : Node   { Using()                  { st=Nd::USING;          Push; } std::vector<std::string> metaPath; bool hasPseudonim{ false }; std::string pseudonim; AVis };
-struct Func          : Node   { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; bool is_native{ false }; AVis };
-struct Type          : Node   { Type(char const*v,bool push=true):id(v) { st=Nd::TYPE; t=Tk::EXPR; if(push) { Push; } } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; std::map<std::string, Func*> dmethods; std::map<std::string, struct VarDefinition*> dfields; std::map<std::string, struct VarDefinition*> dstaticFields; static Type Int, Float, String; AVis };
-struct TypeOp        : Type   { TypeOp(char const*v):Type(v,false) { st=Nd::TYPE; Push; } Type* left{ nullptr }; Type* right{ nullptr }; AVis };
+struct Type          : Node   { Type(char const*v,bool push=true):id(v) { st=Nd::TYPE; t=Tk::EXPR; if(push) { Push; } } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} virtual std::string ToStr() { return id; } std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; std::map<std::string, Func*> dmethods; std::map<std::string, struct VarDefinition*> dfields; std::map<std::string, struct VarDefinition*> dstaticFields; Context* context{ nullptr }; static Type Int, Float, String, Void; AVis };
+struct TypeOp        : Type   { TypeOp(char const*v):Type(v,false) { st=Nd::TYPE; Push; } Type* left{ nullptr }; Type* right{ nullptr }; std::string ToStr() override { return '(' + left->ToStr() + id + right->ToStr() + ')'; } AVis };
+struct TType         : Type   { TType():Type("?",false)  { st=Nd::TYPE; std::cerr << "WARNING! Not concrete types are not implemented or broken\n"; Push; } Type* left{ nullptr }; std::vector<Node*> subscribers; std::string ToStr() override { return id; } AVis };
+struct TypeSeq       : Type   { TypeSeq(char const*v):Type(v,false) { st=Nd::TYPE_SEQ; Push; } std::vector<Type*> seq; std::string ToStr() override { std::string s{ '(' }; bool first = true; for (auto item : seq) { if (first) { first = false; } else { s += id; } s += item->ToStr(); } s.push_back(')'); return s; } AVis };
+struct Func          : Node   { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; bool is_native{ false }; TypeOp* type{ new TypeOp("->") }; Context* context{ nullptr }; AVis };
 struct VarDefinition : Node   { VarDefinition(std::string& name):id(name)
                                                        { st=Nd::VAR_DEFINITION; Push; } VarDefinition():id(""){} std::string id; Node* val{ nullptr }; bool hasConcreteType{ false }; Type* type{ nullptr }; AVis };
 
@@ -84,7 +90,7 @@ struct FwExpr     : Node { FwExpr()                    { st=Nd::FW_EXPR;     t=T
 struct RealNum    : Node { RealNum(double n)    :val(n){ st=Nd::REAL_NUM;    t=Tk::EXPR;       Push; } double val{ 0.0 }; AVis        RealNum () {}          Type* type{ &Type::Float  }; RealNum*removable(double v){ val=v; t=Tk::RMVBL; st=Nd::REAL_NUM; return this; } };
 struct Num        : Node { Num(long n)          :val(n){ st=Nd::NUM;         t=Tk::EXPR;       Push; } long   val{  0  }; AVis        Num     () {}          Type* type{ &Type::Int    }; Num*    removable(long   v){ val=v; t=Tk::RMVBL; st=Nd::NUM; return this; } };
 struct String     : Node { String(std::string&v):val(v){ st=Nd::STRING;      t=Tk::EXPR;       Push; } std::string val;   AVis        String  () {}          Type* type{ &Type::String }; String* removable(std::string const& v){ val=v; t=Tk::RMVBL; st=Nd::STRING; return this; } };
-struct Id         : Node { Id    (std::string&v):val(v){ st=Nd::ID;          t=Tk::EXPR;       Push; } std::string val;   AVis };
+struct Id         : Node { Id    (std::string&v):val(v){ st=Nd::ID;          t=Tk::EXPR;       Push; } std::string val;   Type* type{ nullptr }; AVis };
 struct Call       : Node { Call()                      { st=Nd::CALL;        t=Tk::EXPR;       Push; } Node* funcSource{ nullptr }; std::vector<Node*> arguments; std::vector<std::string> arg_names; AVis };
 struct This       : Node { This()                      { st=Nd::THIS;        t=Tk::EXPR;       Push; } AVis };
 struct EToken     : Node { EToken(Tk token_type)       { st=Nd::TOK;         t=token_type;     Push; } AVis };
@@ -105,8 +111,8 @@ static BinOp* AddAsign () { return new BinOp(Nd::ADD_ASIGN, Tk::EXPR); }
 static BinOp* SubAsign () { return new BinOp(Nd::SUB_ASIGN, Tk::EXPR); }
 static BinOp* MulAsign () { return new BinOp(Nd::MUL_ASIGN, Tk::EXPR); }
 static BinOp* DivAsign () { return new BinOp(Nd::DIV_ASIGN, Tk::EXPR); }
-static TypeOp*Arrow    () { return new TypeOp("->"); }
-static TypeOp*Deckard  () { return new TypeOp("*"); }
+static TypeOp*   Arrow    () { return new TypeOp("->"); }
+static TypeSeq*  Deckard  () { return new TypeSeq("*"); }
 struct Sequence : Node { Sequence() { st = Nd::SEQ; t = Tk::EXPR; Push; } std::vector<Node*> items; Type* type{ nullptr }; AVis };
 
 // Unary Operators

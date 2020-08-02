@@ -1,7 +1,6 @@
-
-\print(a) = native
+using std
 
 
 \main()
-   print("hello, console)")
+   std.print("hello, console)")
 /

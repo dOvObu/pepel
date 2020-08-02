@@ -21,7 +21,6 @@ Node* cb_ITE        (std::vector<Node*>& v);
 Node* cb_For        (std::vector<Node*>& v);
 Node* cb_Where      (std::vector<Node*>& v);
 Node* cb_Lambda     (std::vector<Node*>& v);
-Node* cb_Template   (std::vector<Node*>& v);
 
 
 struct ParserFsm
@@ -84,10 +83,9 @@ struct ParserFsm
 
 	{{Tk::EXPR, Tk::OPN_PAR, Tk::EXPR, Tk::CLS_PAR}, cb_Call},    {{Tk::EXPR, Tk::OPN_PAR, Tk::CLS_PAR}, cb_VoidCall},  {{Tk::EXPR, Tk::IF, Tk::EXPR, Tk::ELSE, Tk::EXPR}, cb_ITE},
 	{{Tk::EXPR, Tk::FOR, Tk::EXPR, Tk::FROM, Tk::EXPR}, cb_For},  {{Tk::EXPR, Tk::WHERE, Tk::EXPR}, cb_Where}, {{Tk::LAMBDA, Tk::EXPR, Tk::DOT, Tk::EXPR}, cb_Lambda}, {{Tk::EXPR, Tk::COMMA, Tk::EXPR}, cb_Sequence},
-   {{Tk::EXPR, Tk::NOT, Tk::EXPR}, cb_Template},
 	};
 
-	int power[17] = {
+	int power[16] = {
 	      8      ,
 		  7       ,
 	    6 , 6    ,
@@ -95,7 +93,6 @@ struct ParserFsm
 	    3,4,3    ,
 	    2,2,2    ,
 	   1,1,2,1   ,
-         2      ,
 	}     ;
 
 
@@ -182,7 +179,7 @@ private:
 	bool _static_field{ false };
 	bool _one_line_func{ false };
 
-	size_t _idx{ 0 };
+	static size_t _idx;
 	size_t _size{ 0 };
 };
 

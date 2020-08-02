@@ -66,7 +66,7 @@ enum class Tk {
 
 namespace token_
 {
-struct Token { Tk t{ Tk::UNKNOWN }; static std::vector<std::shared_ptr<Token>> stack; };
+struct Token { Tk t{ Tk::UNKNOWN }; static std::vector<std::shared_ptr<Token>> stack; static void StartModule() { stack.push_back(std::shared_ptr<Token>(&START, [](auto _) {})); } private: static Token START; };
 struct Using      : public Token { Using     () { Token::t = Tk::USING;     Push; } };
 struct Id         : public Token { Id        () { Token::t = Tk::ID;        Push; } std::string val; };
 struct String     : public Token { String    () { Token::t = Tk::STRING;    Push; } std::string val; };

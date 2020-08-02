@@ -16,21 +16,22 @@ int main(int argc, char *argv[])
    if (argc > 1)
       src = argv[1];
 
-   while (true)
-   {
+   //while (true)
+   //{
       system("cls");
 	   auto res = ParserFsm{}(TokenizerFsm{}(src.c_str()));
-	   //Printer p;
-	   //res->accept(p);
-      //std::cout << std::endl;
 
       Interpreter i;
       res->accept(i);
+
+	   Printer p;
+	   res->accept(p);
+      std::cout << std::endl;
       std::cin.get();
 
       Node::pool.clear();
       Node::stack.clear();
-   }
+   //}
 	std::cout << std::endl;
 
 	return 0;
