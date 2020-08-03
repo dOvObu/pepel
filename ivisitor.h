@@ -6,7 +6,7 @@ struct IVisitor {
 	virtual void visit(struct Using&) = 0;
 	virtual void visit(struct Type&) = 0;
 	virtual void visit(struct TType&) = 0;
-	virtual void visit(struct TypeOp&) = 0;
+	virtual void visit(struct TypeArrow&) = 0;
 	virtual void visit(struct TypeSeq&) = 0;
 	virtual void visit(struct Func&) = 0;
 	virtual void visit(struct VarDefinition&) = 0;

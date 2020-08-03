@@ -1,4 +1,11 @@
 
-\print(a) = native
+\print(a: Str) = native
 
-
+type Cat
+(
+	legs = 4
+	
+	\meow()
+		print("meow")
+	/
+)

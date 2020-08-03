@@ -11,6 +11,7 @@ enum class Nd {
 	USING,
 	TYPE,
 	TYPE_SEQ,
+	TYPE_ARROW,
 	FUNC,
 	VAR_DEFINITION,
 
@@ -76,15 +77,15 @@ struct Context
 struct Node  : token_::Token { Nd st{ Nd::UNKNOWN }; static std::vector<std::shared_ptr<Node>> pool; virtual void accept(IVisitor& v) = 0; virtual ~Node() = default; };
 struct Using         : Node   { Using()                  { st=Nd::USING;          Push; } std::vector<std::string> metaPath; bool hasPseudonim{ false }; std::string pseudonim; AVis };
 struct Type          : Node   { Type(char const*v,bool push=true):id(v) { st=Nd::TYPE; t=Tk::EXPR; if(push) { Push; } } std::string id; std::vector<std::string> metaPath; Type* parent{ nullptr }; bool HasParent() {return parent != nullptr;} virtual std::string ToStr() { return id; } std::vector<Func*> methods; std::vector<struct VarDefinition*> fields; std::vector<struct VarDefinition*> staticFields; std::map<std::string, Func*> dmethods; std::map<std::string, struct VarDefinition*> dfields; std::map<std::string, struct VarDefinition*> dstaticFields; Context* context{ nullptr }; static Type Int, Float, String, Void; AVis };
-struct TypeOp        : Type   { TypeOp(char const*v):Type(v,false) { st=Nd::TYPE; Push; } Type* left{ nullptr }; Type* right{ nullptr }; std::string ToStr() override { return '(' + left->ToStr() + id + right->ToStr() + ')'; } AVis };
+struct TypeArrow     : Type   { TypeArrow(char const*v):Type(v,false) { st=Nd::TYPE_ARROW; Push; } Type* left{ nullptr }; Type* right{ nullptr }; std::string ToStr() override { return '(' + left->ToStr() + id + right->ToStr() + ')'; } AVis };
+struct TypeSeq       : Type   { TypeSeq  (char const*v):Type(v,false) { st=Nd::TYPE_SEQ;   Push; } std::vector<Type*> seq; std::string ToStr() override { std::string s{ '(' }; bool first = true; for (auto item : seq) { if (first) { first = false; } else { s += id; } s += item->ToStr(); } s.push_back(')'); return s; } AVis };
 struct TType         : Type   { TType():Type("?",false)  { st=Nd::TYPE; std::cerr << "WARNING! Not concrete types are not implemented or broken\n"; Push; } Type* left{ nullptr }; std::vector<Node*> subscribers; std::string ToStr() override { return id; } AVis };
-struct TypeSeq       : Type   { TypeSeq(char const*v):Type(v,false) { st=Nd::TYPE_SEQ; Push; } std::vector<Type*> seq; std::string ToStr() override { std::string s{ '(' }; bool first = true; for (auto item : seq) { if (first) { first = false; } else { s += id; } s += item->ToStr(); } s.push_back(')'); return s; } AVis };
-struct Func          : Node   { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; bool is_native{ false }; TypeOp* type{ new TypeOp("->") }; Context* context{ nullptr }; AVis };
+struct Func          : Node   { Func()                   { st=Nd::FUNC;           Push; } std::string id; std::vector<struct VarDefinition*> arguments; Body* body{ nullptr }; bool is_native{ false }; TypeArrow* type{ new TypeArrow("->") }; Context* context{ nullptr }; AVis };
 struct VarDefinition : Node   { VarDefinition(std::string& name):id(name)
                                                        { st=Nd::VAR_DEFINITION; Push; } VarDefinition():id(""){} std::string id; Node* val{ nullptr }; bool hasConcreteType{ false }; Type* type{ nullptr }; AVis };
 
 // Expressions
-struct LambdaFunc : Node { LambdaFunc()                { st=Nd::LAMBDA_FUNC; t=Tk::EXPR;       Push; } std::vector<Node*> arguments;  Node* body{ nullptr }; Type* type{ new TypeOp("->") };  AVis };
+struct LambdaFunc : Node { LambdaFunc()                { st=Nd::LAMBDA_FUNC; t=Tk::EXPR;       Push; } std::vector<Node*> arguments;  Node* body{ nullptr }; Type* type{ new TypeArrow("->") };  AVis };
 struct IteExpr    : Node { IteExpr()                   { st=Nd::ITE_EXPR;    t=Tk::EXPR;       Push; } Node* prop{ nullptr }; Node* passed{ nullptr }; Node* fall{ nullptr }; Type* type{ nullptr };  AVis };
 struct FwExpr     : Node { FwExpr()                    { st=Nd::FW_EXPR;     t=Tk::EXPR;       Push; } Node* itemOp{ nullptr }; Node* id{ nullptr }; Node* idxId{ nullptr }; Node* source{ nullptr }; Node* prop{ nullptr }; AVis };
 struct RealNum    : Node { RealNum(double n)    :val(n){ st=Nd::REAL_NUM;    t=Tk::EXPR;       Push; } double val{ 0.0 }; AVis        RealNum () {}          Type* type{ &Type::Float  }; RealNum*removable(double v){ val=v; t=Tk::RMVBL; st=Nd::REAL_NUM; return this; } };
@@ -111,14 +112,14 @@ static BinOp* AddAsign () { return new BinOp(Nd::ADD_ASIGN, Tk::EXPR); }
 static BinOp* SubAsign () { return new BinOp(Nd::SUB_ASIGN, Tk::EXPR); }
 static BinOp* MulAsign () { return new BinOp(Nd::MUL_ASIGN, Tk::EXPR); }
 static BinOp* DivAsign () { return new BinOp(Nd::DIV_ASIGN, Tk::EXPR); }
-static TypeOp*   Arrow    () { return new TypeOp("->"); }
+static TypeArrow*   Arrow    () { return new TypeArrow("->"); }
 static TypeSeq*  Deckard  () { return new TypeSeq("*"); }
 struct Sequence : Node { Sequence() { st = Nd::SEQ; t = Tk::EXPR; Push; } std::vector<Node*> items; Type* type{ nullptr }; AVis };
 
 // Unary Operators
 struct Plus  : Node { Plus()  { st=Nd::PLUS;  t=Tk::ADD; Push; } Node *right{ nullptr }; Type* type{ nullptr }; AVis };
 struct Minus : Node { Minus() { st=Nd::MINUS; t=Tk::SUB; Push; } Node *right{ nullptr }; Type* type{ nullptr }; AVis };
-struct Not   : Node { Not()   { st=Nd::NOT;   t=Tk::NOT; Push; } Node *right{ nullptr }; Type* type{ nullptr }; AVis };
+struct Not   : Node { Not()   { st=Nd::NOT;   t=Tk::NOT; Push; } Node *right{ nullptr }; Type* type{ &Type::Int }; AVis };
 
 // Statements
 struct Body     : Node { Body()     { st=Nd::BODY;     Push; } std::vector<Node*> statements; AVis };
@@ -129,7 +130,7 @@ struct Yield    : Node { Yield()    { st=Nd::YIELD;    Push; } bool to_break{ fa
 struct Return   : Node { Return()   { st=Nd::RETURN;   Push; } Node* e{ nullptr }; AVis };
 struct Break    : Node { Break()    { st=Nd::BREAK;    Push; } AVis };
 struct Continue : Node { Continue() { st=Nd::CONTINUE; Push; } AVis };
-struct Foreach  : Node { Foreach() { st = Nd::FOREACH;  Push; } Id* it{ nullptr }; Id* idx{ nullptr }; Node* range{ nullptr }; Body* body{ nullptr }; AVis };
+struct Foreach  : Node { Foreach()  { st=Nd::FOREACH;  Push; } Id* it{ nullptr }; Id* idx{ nullptr }; Node* range{ nullptr }; Body* body{ nullptr }; AVis };
 
 
 struct Module : Node

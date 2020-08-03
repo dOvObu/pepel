@@ -34,7 +34,7 @@ struct TokenizerFsm
 	void OnUnderscore();
 	void On_();
 
-	std::pair<std::vector<std::shared_ptr<token_::Token>>&, char const*> operator()(char const* file_name);
+	std::pair<std::vector<std::shared_ptr<token_::Token>>*, char const*> operator()(char const* file_name);
 private:
 	unsigned _state{ 0 };
 	size_t _idx{ 0 };

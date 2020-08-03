@@ -8,7 +8,7 @@
 #define RmEOLs while (!Token::stack.empty() && Token::stack.back()->t == Tk::EOL) Token::stack.pop_back()
 using namespace token_;
 
-std::pair<std::vector<std::shared_ptr<Token>>&, char const*> TokenizerFsm::operator()(char const* file_name)
+std::pair<std::vector<std::shared_ptr<Token>>*, char const*> TokenizerFsm::operator()(char const* file_name)
 {
    std::ifstream file(file_name);
    std::stringstream st;
@@ -39,7 +39,7 @@ std::pair<std::vector<std::shared_ptr<Token>>&, char const*> TokenizerFsm::opera
    new Eof();
 
    _src = nullptr;
-   return { Token::stack, file_name };
+   return { &Token::stack, file_name };
 }
 void TokenizerFsm::NewId()
 {

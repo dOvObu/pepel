@@ -1,6 +1,15 @@
-using std
+using std.print as pr
+using std.Cat
+
+\get()
+	c = Cat
+/
 
 
 \main()
-   std.print("hello, console)")
+   get()
+   ct = Cat()
+   ct.meow()
+   a = "hello, console)"
+   pr(a)
 /

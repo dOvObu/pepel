@@ -40,7 +40,7 @@ class Printer : public IVisitor
       std::cout << "(unknown type)";
    }
 
-	void visit(TypeOp& r) override
+	void visit(TypeArrow& r) override
 	{
       std::cout << "(type " << r.ToStr() << ')';
 	}
@@ -270,10 +270,10 @@ class Printer : public IVisitor
 		std::cout << "(module " << r.name << std::endl;
 		if (!r.dependecies.empty()) std::cout << "::: dependencies :::" << std::endl;
 		for (auto u : r.dependecies) { u->accept(*this); std::cout << std::endl; }
-		if (!r.functions.empty()) std::cout << "::: functions :::" << std::endl;
-		for (auto f : r.functions) { f->accept(*this); std::cout << std::endl; }
 		if (!r.types.empty()) std::cout << "::: types :::" << std::endl;
 		for (auto t : r.types) { t->accept(*this); std::cout << std::endl; }
+		if (!r.functions.empty()) std::cout << "::: functions :::" << std::endl;
+		for (auto f : r.functions) { f->accept(*this); std::cout << std::endl; }
 		std::cout << ")";
 	}
 

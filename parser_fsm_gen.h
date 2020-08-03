@@ -162,7 +162,7 @@ struct ParserFsm
 	void On_not_EOF_or_End_or_OrNextComma();
 	void On_not_EOL_or_EOF();
 
-	Module* operator()(std::pair < std::vector<std::shared_ptr<token_::Token> >&, char const*> tokens);
+	Module* operator()(std::pair < std::vector<std::shared_ptr<token_::Token> >*, char const*> tokens);
 private:
 	std::vector<Parser__State> _stack{ Parser__State::module_statements };
 	std::vector<std::shared_ptr<token_::Token>>* _tokens;

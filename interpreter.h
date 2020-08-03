@@ -8,12 +8,15 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <set>
 
 struct Interpreter : public IVisitor
 {
    std::map<std::string, Module*> modules;
    std::vector<Type*> type_stack;
    std::vector<Context*> context_stack;
+   std::set<Func*> visited_func;
+   std::set<Type*> visited_type;
 private:
    void visit(Using& n) override
    {
@@ -21,6 +24,20 @@ private:
 
    void visit(Type& n) override
    {
+      if (visited_type.count(&n))
+      {
+         return;
+      }
+      visited_type.insert(&n);
+      context_stack.push_back(n.context);
+      Context context{ {}, n.dmethods, n.dfields };
+      context_stack.push_back(&context);
+
+      for (auto f : n.fields) f->accept(*this);
+      for (auto m : n.methods) m->accept(*this);
+
+      context_stack.pop_back();
+      context_stack.pop_back();
    }
 
    void visit(TType& n) override
@@ -31,12 +48,18 @@ private:
    {
    }
 
-   void visit(TypeOp& n) override
+   void visit(TypeArrow& n) override
    {
    }
 
    void visit(Func& n) override
    {
+      if (visited_func.count(&n))
+      {
+         return;
+      }
+      visited_func.insert(&n);
+
       context_stack.push_back(n.context);
 
       if (n.arguments.size() > 1)
@@ -64,7 +87,10 @@ private:
       {
          n.type->left = n.arguments[0]->hasConcreteType ? n.arguments[0]->type : new TType();
       }
-      std::cout << "test " << n.id << std::endl;
+
+      Context context;
+      for (auto arg : n.arguments) context.vars[arg->id] = arg;
+      context_stack.push_back(&context);
 
       auto stackLen = type_stack.size();
       n.body->accept(*this);
@@ -74,11 +100,17 @@ private:
          n.type->right = type_stack.back();
          type_stack.pop_back();
       }
+      else if (n.is_native)
+      {
+         // TODO : Take info about returned type from API
+         n.type->right = &Type::Void;
+      }
       else
       {
          n.type->right = &Type::Void;
       }
 
+      context_stack.pop_back();
       context_stack.pop_back();
    }
 
@@ -97,9 +129,6 @@ private:
             n.hasConcreteType = true;
             type_stack.pop_back();
          }
-      }
-      else
-      {
       }
    }
 
@@ -135,13 +164,10 @@ private:
       for (auto i = context_stack.size(); i > 0;)
       {
          --i;
-         std::cout << "--- " << n.val << std::endl;
-         for (auto f : context_stack[i]->funcs) std::cout << f.first << std::endl;
-         for (auto f : context_stack[i]->vars)  std::cout << f.first << std::endl;
-         for (auto f : context_stack[i]->types) std::cout << f.first << std::endl;
-         
+
          if (context_stack[i]->funcs.count(n.val))
          {
+            context_stack[i]->funcs[n.val]->accept(*this);
             type_stack.push_back(n.type = context_stack[i]->funcs[n.val]->type);
             break;
          }
@@ -152,6 +178,7 @@ private:
          }
          else if (context_stack[i]->types.count(n.val))
          {
+            context_stack[i]->types[n.val]->accept(*this);
             type_stack.push_back(n.type = context_stack[i]->types[n.val]);
             break;
          }
@@ -164,13 +191,88 @@ private:
 
    void visit(Call& n) override
    {
+      auto stackLen = type_stack.size();
       n.funcSource->accept(*this);
+      if (type_stack.size() > stackLen && type_stack.back()->st == Nd::TYPE_ARROW)
+      {
+         auto t = reinterpret_cast<TypeArrow*>(type_stack.back());
+         type_stack.pop_back();
+         if (t->left == nullptr)
+         {
+            t->left = n.arguments.empty() ? &Type::Void : new TType();
+         }
+         if (t->right == nullptr)
+         {
+            t->right = &Type::Int;
+         }
+         type_stack.push_back(t->right);
+      }
+      else
+      {
+         std::cout << "ERROR! Call not from function\n";
+      }
    }
 
    void visit(BinOp& n) override
    {
+      auto stackLen = type_stack.size();
       n.left->accept(*this);
-      n.right->accept(*this);
+      bool enter_module{ false };
+      
+      Type *left{ nullptr }, *right{ nullptr };
+      if (type_stack.size() > stackLen)
+      {
+         left = type_stack.back();
+         type_stack.pop_back();
+      }
+      else
+      {
+         context_stack.push_back(&modules[reinterpret_cast<Id*>(n.left)->val]->context);
+         enter_module = true;
+      }
+
+      bool in_type = false;
+      if (!enter_module && n.st == Nd::DOT)
+      {
+         if (left != &Type::Float && left != &Type::Int)
+         {
+            Context context;
+            context.funcs = left->dmethods;
+            context.vars = left->dfields;
+            for (auto f : left->staticFields) context.vars[f->id] = f;
+            context_stack.push_back(&context);
+            in_type = true;
+            n.right->accept(*this);
+         }
+      }
+      else
+      {
+         n.right->accept(*this);
+      }
+      right = type_stack.size() > stackLen ? type_stack.back() : &Type::Void;
+      if (in_type)
+      {
+         context_stack.pop_back();
+      }
+
+      if (left != right && n.st != Nd::DOT)
+      {
+         type_stack.pop_back();
+
+         if (left == &Type::String || right == &Type::String)
+         {
+            type_stack.push_back(&Type::String);
+         }
+         else if ((left == &Type::Float && right == &Type::Int) || (left == &Type::Int && right == &Type::Float))
+         {
+            type_stack.push_back(&Type::Float);
+         }
+      }
+
+      if (enter_module)
+      {
+         context_stack.pop_back();
+      }
    }
 
    void visit(Sequence& n) override
@@ -179,14 +281,22 @@ private:
 
    void visit(Plus& n) override
    {
+      n.right->accept(*this);
+      n.type = type_stack.back();
    }
 
    void visit(Minus& n) override
    {
-   }
+      n.right->accept(*this);
+      n.type = type_stack.back();
+   }  
 
    void visit(Not& n) override
    {
+      n.right->accept(*this);
+      n.type = type_stack.back();
+      type_stack.pop_back();
+      type_stack.push_back(n.type);
    }
 
    void visit(Body& n) override
@@ -220,6 +330,14 @@ private:
 
    void visit(Return& n) override
    {
+      if (n.e == nullptr)
+      {
+         type_stack.push_back(&Type::Void);
+      }
+      else
+      {
+         n.e->accept(*this);
+      }
    }
 
    void visit(Break& n) override
@@ -254,10 +372,6 @@ private:
          if (modules.count(moduleName) == 0)
          {
             modules[moduleName] = ParserFsm{}(TokenizerFsm{}((moduleName + ".txt").c_str()));
-            {
-               Printer pr;
-               modules[moduleName]->accept(pr);
-            }
             HandleDependencies(*modules[moduleName]);
          }
 
