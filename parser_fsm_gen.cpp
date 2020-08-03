@@ -663,6 +663,7 @@ void ParserFsm::ParseByRules(std::vector<RulePair>& rules, int* power)
 {
 	size_t& j = _idx;
 	int parenthesis = 0;
+
 	while (_stack.back() == Parser___State::expr)
 	{
 		auto c = (*_tokens)[j++].get();
@@ -670,11 +671,11 @@ void ParserFsm::ParseByRules(std::vector<RulePair>& rules, int* power)
 		if (c->t == Tk::EOF_) { _stack.pop_back(); break; }
 		{
 			auto c2 = (*_tokens)[j]->t;
-			if (c2 == Tk::ELIF || c2 == Tk::ELSE) { _stack.pop_back(); break; }
+			if (c2 == Tk::ELIF) { _stack.pop_back(); break; }
 		}
 		token_::Token* a = (j >= _tokens->size() ? nullptr : (*_tokens)[j].get());
 
-		if (c->t == Tk::NUM)      _exprs.push_back(new ::Num(reinterpret_cast<token_::Number*>(c)->val));
+		if      (c->t == Tk::NUM)      _exprs.push_back(new ::Num(reinterpret_cast<token_::Number*>(c)->val));
 		else if (c->t == Tk::REAL_NUM) _exprs.push_back(new ::RealNum(reinterpret_cast<token_::RealNum*>(c)->val));
 		else if (c->t == Tk::STRING)   _exprs.push_back(new ::String(reinterpret_cast<token_::String*>(c)->val));
 		else if (c->t == Tk::ID)       _exprs.push_back(new ::Id(reinterpret_cast<token_::Id*>(c)->val));

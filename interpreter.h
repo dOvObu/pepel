@@ -218,8 +218,9 @@ private:
       auto stackLen = type_stack.size();
       n.left->accept(*this);
       bool enter_module{ false };
+      Type* left{ nullptr };
+      Type* right{ nullptr };
       
-      Type *left{ nullptr }, *right{ nullptr };
       if (type_stack.size() > stackLen)
       {
          left = type_stack.back();
@@ -232,18 +233,18 @@ private:
       }
 
       bool in_type = false;
-      if (!enter_module && n.st == Nd::DOT)
+      if (!enter_module && n.st == Nd::DOT && left != &Type::Float && left != &Type::Int)
       {
-         if (left != &Type::Float && left != &Type::Int)
+         Context context;
+         if (left != nullptr)
          {
-            Context context;
             context.funcs = left->dmethods;
             context.vars = left->dfields;
-            for (auto f : left->staticFields) context.vars[f->id] = f;
+            for (auto f : left->staticFields) { context.vars[f->id] = f; }
             context_stack.push_back(&context);
             in_type = true;
-            n.right->accept(*this);
          }
+         n.right->accept(*this);
       }
       else
       {

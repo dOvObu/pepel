@@ -8,7 +8,9 @@ using std.Cat
 
 \main()
    get()
-   ct = Cat()
+   ct = 2 if 2 == 2 else 1
+   l = 0
+   ct2 = x*2 for x from l where x > 0
    ct.meow()
    a = "hello, console)"
    pr(a)
