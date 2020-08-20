@@ -299,7 +299,7 @@ private:
         
         
         Dict<Vec<Symbol>> iResult;
-        
+        // разворачиваем нетерминалы, чтобы множества последующих символов состояли только из терминалов
         for (int i = 0; 2 > i; ++i)
         {
             for (auto& [src, dst] : delayedShare)
