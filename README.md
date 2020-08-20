@@ -29,8 +29,8 @@ type List
     next.printList()
   /
 
-  \ printList2() print(value); next.printList2();;
-  \ printList3() print(value); next.printList3(); /
+  \ printList2() print(value); next.?printList2();;
+  \ printList3() print(value); next.?printList3(); /
   \ show() = print(value)
 )
 ```
