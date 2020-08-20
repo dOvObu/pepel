@@ -324,8 +324,7 @@ private:
         return result;
     }
     
-    
-    void _ExtendWith(Vec<Symbol>& val, Vec<Symbol>& data)
+    /* void _ExtendWith(Vec<Symbol>& val, Vec<Symbol>& data)
     {
         for (auto& r : data)
         {
@@ -343,8 +342,7 @@ private:
                 val.push_back(r);
             }
         }
-    }
-   
+    } */
     
     void _ShowFollows(Dict<Vec<Symbol>>& follow)
     {
